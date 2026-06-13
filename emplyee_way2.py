@@ -133,17 +133,6 @@ with col_title:
                 unsafe_allow_html=True)
 
 st.write("---")
-
-
-# ====================== DATA LOADING – MongoDB ======================
-# 🔐 بيانات الاتصال محفوظة في Streamlit Secrets (مش hardcoded)
-# أنشئ ملف  .streamlit/secrets.toml  وحط فيه:
-#
-#   [mongo]
-#   uri = "mongodb+srv://elhosenyhassan007_db_user:<PASSWORD>@cluster0.x5jk1ox.mongodb.net/"
-#
-# أو من لوحة Streamlit Cloud: Settings → Secrets
-
 @st.cache_resource(show_spinner="🔗 جاري الاتصال بـ MongoDB …")
 def get_mongo_client():
     return MongoClient("mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/")
@@ -508,8 +497,7 @@ with tab2:
  
     with c5:
         submissions["submission_week"] = submissions["submitted_at"].dt.isocalendar().week
-        sub_trends = (submissions.groupby(["course_id", "submission_week"])
-                      .size().reset_index(name="total_submissions"))
+        sub_trends =submissions.groupby(["course_id", "submission_week"]).size().reset_index(name="total_submissions")
  
         fig4 = px.line(
             sub_trends, x="submission_week", y="total_submissions", color="course_id",
