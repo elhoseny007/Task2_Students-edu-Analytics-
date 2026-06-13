@@ -497,7 +497,7 @@ with tab2:
  
     with c5:
         submissions["submission_week"] = submissions["submitted_at"].dt.isocalendar().week
-        sub_trends =submissions.groupby(["course_id", "submission_week"]).size().reset_index(name="total_submissions")
+                sub_trends = ((submissions.groupby(["course_id", "submission_week"]).size().reset_index(name="total_submissions")).sort_values(by=["course_id", "submission_week"]))
  
         fig4 = px.line(
             sub_trends, x="submission_week", y="total_submissions", color="course_id",
