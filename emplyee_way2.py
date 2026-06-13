@@ -133,23 +133,18 @@ with col_title:
 
 st.write("---")
 
-
-# ====================== DATA LOADING ======================
-# ⚠️  غيّر المسارات دي لو شغّالت من MongoDB أو حاجة تانية
-DATA_DIR = r"d:\Desktop\Data Analysis\Internship"   # ← عدّل هنا فقط
-
 @st.cache_data(show_spinner="⏳ جاري تحميل البيانات …")
 def load_all_data(data_dir: str):
     # ── CSV files ──
-    courses     = pd.read_csv(os.path.join(data_dir, "courses.csv"))
-    groups      = pd.read_csv(os.path.join(data_dir, "groups.csv"))
-    students    = pd.read_csv(os.path.join(data_dir, "students.csv"))
-    concepts    = pd.read_csv(os.path.join(data_dir, "concepts_performance.csv"))
-    engagement  = pd.read_csv(os.path.join(data_dir, "engagement_events.csv"))
-    submissions = pd.read_csv(os.path.join(data_dir, "assignment_submissions.csv"))
+    courses     = pd.read_csv(os.path.join( "courses.csv"))
+    groups      = pd.read_csv(os.path.join("groups.csv"))
+    students    = pd.read_csv(os.path.join("students.csv"))
+    concepts    = pd.read_csv(os.path.join("concepts_performance.csv"))
+    engagement  = pd.read_csv(os.path.join("engagement_events.csv"))
+    submissions = pd.read_csv(os.path.join("assignment_submissions.csv"))
 
     # ── JSON grades ──
-    with open(os.path.join(data_dir, "grades.json"), "r", encoding="utf-8") as f:
+    with open(os.path.join("grades.json"), "r", encoding="utf-8") as f:
         raw_grades = json.load(f)
     grades = pd.json_normalize(
         raw_grades,
@@ -158,7 +153,7 @@ def load_all_data(data_dir: str):
     )
 
     # ── Excel attendance (دمج كل الـ sheets) ──
-    excel_file = pd.ExcelFile(os.path.join(data_dir, "attendance.xlsx"))
+    excel_file = pd.ExcelFile(os.path.join("attendance.xlsx"))
     attendance = pd.concat(
         [pd.read_excel(excel_file, sheet_name=s) for s in excel_file.sheet_names],
         ignore_index=True
