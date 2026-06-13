@@ -345,21 +345,52 @@ with tab2:
         </div>
         """, unsafe_allow_html=True)
 
-    with c6:
-        # فحص آمن لجدول التفاعل (Engagement)
-        if not engagement.empty and 'event_datetime' in engagement.columns:
-            engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'])
-            engagement['engagement_week'] = engagement['event_datetime'].dt.isocalendar().week
-            weekly_eng = engagement.groupby('engagement_week').size().reset_index(name='total_events')
-            
-            fig5 = px.line(weekly_eng, x='engagement_week', y='total_events',
-                           title='Total Engagement Events Across Weeks (Mid-Course Slump Testing) (Q-5)',
-                           labels={'engagement_week': 'Calendar Week', 'total_events': 'Total Events'}, markers=True)
-            fig5.update_traces(line_color='purple', line_width=3)
-            fig5.update_layout(xaxis_type='category')
-            st.plotly_chart(apply_modern_layout(fig5), use_container_width=True)
+with c6:
+        st.markdown("#### 📱 توزيع الأجهزة وتحليلات التفاعل")
+        
+        # 1. فحص أمان لجدول الـ engagement قبل عمل الـ groupby للأجهزة
+        if not engagement.empty and 'student_id' in engagement.columns and 'device' in engagement.columns:
+            try:
+                student_device = engagement.groupby('student_id')['device'].agg(lambda x: x.mode()[0] if not x.mode().empty else "Unknown").reset_index()
+                device_counts = student_device['device'].value_counts().reset_index()
+                device_counts.columns = ['device', 'count']
+                
+                fig6 = px.pie(device_counts, values='count', names='device',
+                              title='Primary Device Usage Distribution (Q-6)',
+                              hole=0.4, color_discrete_sequence=px.colors.sequential.Teal_r)
+                st.plotly_chart(apply_modern_layout(fig6), use_container_width=True)
+            except Exception as e:
+                st.warning("حدث خطأ أثناء معالجة بيانات الأجهزة الفرعية.")
         else:
-            st.info("📈 بيانات تفاعل الطلاب (Engagement Events) جاري مزامنتها الآن.")
+            # رسالة بديلة نظيفة تمنع الشاشة الحمراء
+            st.info("📱 بيانات الأجهزة (Device Trends) غير متوفرة أو عمود student_id غير موجود في الـ engagement حالياً.")
+
+        # 2. فحص أمان للجزء الخاص بالـ Engagement Events (الأسابيع) لو موجود في الكود عندك
+        if not engagement.empty and 'event_datetime' in engagement.columns:
+            try:
+                engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'])
+                engagement['engagement_week'] = engagement['event_datetime'].dt.isocalendar().week
+                weekly_eng = engagement.groupby('engagement_week').size().reset_index(name='total_events')
+                
+                fig5 = px.line(weekly_eng, x='engagement_week', y='total_events',
+                               title='Total Engagement Events Across Weeks (Mid-Course Slump Testing) (Q-5)',
+                               labels={'engagement_week': 'Calendar Week', 'total_events': 'Total Events'}, markers=True)
+                fig5.update_traces(line_color='purple', line_width=3)
+                fig5.update_layout(xaxis_type='category')
+                st.plotly_chart(apply_modern_layout(fig5), use_container_width=True)
+            except Exception as e:
+                pass
+        else:
+            st.info("📈 بيانات تفاعل الطلاب الأسبوعية (Engagement Weeks) جاري مزامنتها.")
+
+        st.markdown("""
+        <div class="insight-box">
+            <div class="insight-title">💡 Insight (Q-5 & Q-6)</div>
+            <p class="insight-text">• معظم التفاعلات تتم عبر أجهزة الهاتف المحمول، مما يستدعي تحسين واجهات المنصة لتناسب الهواتف، مع رصد خمول تدريجي في منتصف الكورس.</p>
+            <div class="rec-title">🚀 Recommendation</div>
+            <p class="insight-text">• تصميم وتثبيت محتوى تفاعلي خفيف (Micro-learning) يسهل تصفحه عبر الموبايل لإعادة جذب الطلاب خلال فترة الخمول.</p>
+        </div>
+        """, unsafe_allow_html=True)
     c7, c8 = st.columns(2)
     
     with c7:
