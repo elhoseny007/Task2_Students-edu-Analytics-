@@ -17,10 +17,8 @@ from pymongo import MongoClient
 @st.cache_data # لمنع إعادة تحميل الداتا مع كل حركة في الداشبورد
 def load_all_pipeline_data_from_mongo():
     # 1. سحب رابط الاتصال بأمان من إعدادات Streamlit Secrets
-    MONGO_URI = st.secrets["mongo"]["uri"]
-    
     # 2. الاتصال بـ MongoDB
-    client = MongoClient(MONGO_URI)
+    client = MongoClient('mongodb+srv://elhosenyhassan007_db_user:<db_password>@cluster0.x5jk1ox.mongodb.net/)
     
     # 3. اسم قاعدة البيانات الحقيقي من الأطلس
     db = client['kayfa_analytics']
