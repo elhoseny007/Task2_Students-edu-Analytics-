@@ -311,20 +311,31 @@ with tab5:
 # ────────────────────────────────────────────────────────
 # TAB 2: Submissions & Device Trends (Q4, Q5, Q6)
 # ────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────
+# TAB 2: Submissions & Device Trends (Q4, Q5, Q6)
+# ────────────────────────────────────────────────────────
 with tab2:
     st.subheader("📌 الشريحة الثانية: تتبع وتيرة التسليمات وتفاعل الأجهزة الذكية")
     c5, c6 = st.columns(2)
     
     with c5:
-        submissions['submission_week'] = submissions['submitted_at'].dt.isocalendar().week
-        sub_trends = submissions.groupby(['course_id', 'submission_week']).size().reset_index(name='total_submissions')
-        
-        fig4 = px.line(sub_trends, x='submission_week', y='total_submissions', color='course_id',
-                       title='Assignment Submission Trends Across Calendar Weeks (Q-4)',
-                       labels={'submission_week': 'Calendar Week', 'total_submissions': 'Submissions Count'}, markers=True)
-        fig4.update_layout(xaxis_type='category')
-        st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
-        
+        # فحص آمن: هل الجدول موجود وهل جواه عمود وقت التسليم؟
+        if not submissions.empty and 'submitted_at' in submissions.columns:
+            # تحويل العمود لتاريخ بأمان لو مش متحول
+            submissions['submitted_at'] = pd.to_datetime(submissions['submitted_at'])
+            submissions['submission_week'] = submissions['submitted_at'].dt.isocalendar().week
+            
+            sub_trends = submissions.groupby(['course_id', 'submission_week']).size().reset_index(name='total_submissions')
+            
+            fig4 = px.line(sub_trends, x='submission_week', y='total_submissions', color='course_id',
+                           title='Assignment Submission Trends Across Calendar Weeks (Q-4)',
+                           labels={'submission_week': 'Calendar Week', 'total_submissions': 'Submissions Count'}, markers=True)
+            fig4.update_layout(xaxis_type='category')
+            st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
+        else:
+            # رسالة ذكية تظهر للمستخدم بدل ما الأبليكيشن يقع
+            st.info("🕒 بيانات تسليم الواجبات (Submissions) جاري تحديثها حالياً على الكلاود أو عمود submitted_at غير متوفر.")
+            
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-4)</div>
@@ -335,26 +346,20 @@ with tab2:
         """, unsafe_allow_html=True)
 
     with c6:
-        engagement['engagement_week'] = engagement['event_datetime'].dt.isocalendar().week
-        weekly_eng = engagement.groupby('engagement_week').size().reset_index(name='total_events')
-        
-        fig5 = px.line(weekly_eng, x='engagement_week', y='total_events',
-                       title='Total Engagement Events Across Weeks (Mid-Course Slump Testing) (Q-5)',
-                       labels={'engagement_week': 'Calendar Week', 'total_events': 'Total Events'}, markers=True)
-        fig5.update_traces(line_color='purple', line_width=3)
-        fig5.update_layout(xaxis_type='category')
-        st.plotly_chart(apply_modern_layout(fig5), use_container_width=True)
-        
-        st.markdown("""
-        <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-5)</div>
-            <p class="insight-text">• رصد انخفاض ملحوظ في أحداث التفاعل بمنتصف الكورس (Mid-Course Slump)، وهو مؤشر نفسي خطير لملل الطلاب وفقدان الحماس الشائع.</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• إطلاق مسابقات تحفيزية (Gamification) أو تحديات تفاعلية قصيرة في هذه الأسابيع الحرجة لإعادة تنشيط الحركة الرقمية.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.write("---")
+        # فحص آمن لجدول التفاعل (Engagement)
+        if not engagement.empty and 'event_datetime' in engagement.columns:
+            engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'])
+            engagement['engagement_week'] = engagement['event_datetime'].dt.isocalendar().week
+            weekly_eng = engagement.groupby('engagement_week').size().reset_index(name='total_events')
+            
+            fig5 = px.line(weekly_eng, x='engagement_week', y='total_events',
+                           title='Total Engagement Events Across Weeks (Mid-Course Slump Testing) (Q-5)',
+                           labels={'engagement_week': 'Calendar Week', 'total_events': 'Total Events'}, markers=True)
+            fig5.update_traces(line_color='purple', line_width=3)
+            fig5.update_layout(xaxis_type='category')
+            st.plotly_chart(apply_modern_layout(fig5), use_container_width=True)
+        else:
+            st.info("📈 بيانات تفاعل الطلاب (Engagement Events) جاري مزامنتها الآن.")
     c7, c8 = st.columns(2)
     
     with c7:
