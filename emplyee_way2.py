@@ -234,43 +234,79 @@ with st.sidebar:
     if os.path.exists("Kayfa_logo.png"):
         st.image("Kayfa_logo.png", width=160)
  
-available_groups = sorted(final_analysis_df["group_id"].unique())
-selected_group   = st.sidebar.selectbox("اختر المجموعة المستهدفة (Group ID):", available_groups)
+# تأمين استخراج المجموعات المتاحة من جدول الطلاب الأساسي (students المأخوذ من users)
+if 'students' in locals() and not students.empty and "group_id" in students.columns:
+    available_groups = sorted(students["group_id"].dropna().unique())
+else:
+    available_groups = ["No Groups Found"]
+
+selected_group = st.sidebar.selectbox("اختر المجموعة المستهدفة (Group ID):", available_groups)
  
-# فلترة البيانات للمجموعة المختارة
-filtered_final  = final_analysis_df[final_analysis_df["group_id"] == selected_group]
-group_studs     = filtered_final["student_id"].unique()
-filtered_att    = attendance[attendance["student_id"].isin(group_studs)]
+# ══════════════════════════════════════════════
+# فلترة البيانات ديناميكياً للمجموعة المختارة
+# ══════════════════════════════════════════════
+
+# 1. فلترة الطلاب
+if 'students' in locals() and not students.empty:
+    filtered_students = students[students["group_id"] == selected_group]
+    group_studs = filtered_students["student_id"].unique()
+else:
+    filtered_students = pd.DataFrame()
+    group_studs = []
+
+# 2. فلترة الأداء والدرجات (filtered_final)
+if 'final_analysis_df' in locals() and not final_analysis_df.empty:
+    filtered_final = final_analysis_df[final_analysis_df["student_id"].isin(group_studs)]
+else:
+    filtered_final = pd.DataFrame(columns=["student_id", "score", "type"])
+
+# 3. فلترة الحضور والتفاعل (attendance)
+if 'attendance' in locals() and not attendance.empty:
+    # بنفلتر الحضور بناءً على الطلاب اللي في المجموعة المختارة
+    filtered_att = attendance[attendance["student_id"].isin(group_studs)]
+else:
+    filtered_att = pd.DataFrame(columns=["student_id", "is_present"])
  
  
-# ====================== KPIs ======================
+# =========================================================
+# 📊 شاشة المؤشرات الرئيسية المتفلترة (KPIs)
+# =========================================================
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
  
 with kpi1:
-    total_active = filtered_final["student_id"].nunique()
+    # الاعتماد على عدد الطلاب الفعليين في المجموعة من جدول الطلاب
+    total_active = len(group_studs)
     st.metric("👥 الطلاب النشطون", f"{total_active} طالب", "مستقر")
  
 with kpi2:
-    avg_score      = filtered_final["score"].mean() if not filtered_final.empty else 0.0
-    benchmark      = 70.0
+    # حساب متوسط الدرجات للمجموعة الحالية
+    avg_score = filtered_final["score"].mean() if not filtered_final.empty and "score" in filtered_final.columns else 0.0
+    benchmark = 70.0
     st.metric("🎯 متوسط درجات المجموعة", f"{avg_score:.1f}%",
               f"{avg_score - benchmark:+.1f}% vs المنصة")
  
 with kpi3:
-    att_rate = filtered_att["is_present"].mean() * 100 if not filtered_att.empty else 0.0
+    # حساب معدل الحضور الفعلي للمجموعة المختارة
+    if not filtered_att.empty and "is_present" in filtered_att.columns:
+        att_rate = filtered_att["is_present"].mean() * 100
+    else:
+        att_rate = 0.0
     st.metric("📅 معدل الحضور", f"{att_rate:.1f}%",
               "-2.1%" if att_rate < 75 else "+OK")
  
 with kpi4:
-    perf_check   = filtered_final.groupby("student_id")["score"].mean()
-    at_risk_count = (perf_check < 60).sum() if not perf_check.empty else 0
-    risk_ratio   = (at_risk_count / total_active * 100) if total_active > 0 else 0
+    # حساب نسبة الخطورة بناءً على الطلاب اللي متوسط درجاتهم أقل من 60%
+    if not filtered_final.empty and "score" in filtered_final.columns:
+        perf_check = filtered_final.groupby("student_id")["score"].mean()
+        at_risk_count = (perf_check < 60).sum()
+    else:
+        at_risk_count = 0
+        
+    risk_ratio = (at_risk_count / total_active * 100) if total_active > 0 else 0.0
     st.metric("🚨 نسبة الخطورة", f"{risk_ratio:.1f}%",
               f"{at_risk_count} طلاب يحتاجون تدخل", delta_color="inverse")
  
 st.write("---")
- 
- 
 # ====================== TABS ======================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📈 Q1-Q3: Demographics & Core Performance",
