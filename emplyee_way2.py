@@ -10,6 +10,7 @@ import streamlit as st
 import json
 import os
 import warnings
+from pymongo import MongoClient
 
 warnings.filterwarnings("ignore")
 
@@ -133,46 +134,67 @@ with col_title:
 
 st.write("---")
 
-@st.cache_data(show_spinner="⏳ جاري تحميل البيانات …")
-def load_all_data(data_dir: str):
-    # ── CSV files ──
-    courses     = pd.read_csv(os.path.join( "courses.csv"))
-    groups      = pd.read_csv(os.path.join("groups.csv"))
-    students    = pd.read_csv(os.path.join("students.csv"))
-    concepts    = pd.read_csv(os.path.join("concepts_performance.csv"))
-    engagement  = pd.read_csv(os.path.join("engagement_events.csv"))
-    submissions = pd.read_csv(os.path.join("assignment_submissions.csv"))
 
-    # ── JSON grades ──
-    with open(os.path.join("grades.json"), "r", encoding="utf-8") as f:
-        raw_grades = json.load(f)
+# ====================== DATA LOADING – MongoDB ======================
+# 🔐 بيانات الاتصال محفوظة في Streamlit Secrets (مش hardcoded)
+# أنشئ ملف  .streamlit/secrets.toml  وحط فيه:
+#
+#   [mongo]
+#   uri = "mongodb+srv://elhosenyhassan007_db_user:<PASSWORD>@cluster0.x5jk1ox.mongodb.net/"
+#
+# أو من لوحة Streamlit Cloud: Settings → Secrets
+
+@st.cache_resource(show_spinner="🔗 جاري الاتصال بـ MongoDB …")
+def get_mongo_client():
+    """اتصال واحد بيتعاد استخدامه طول جلسة التطبيق."""
+    uri = st.secrets["mongo"]["uri"]
+    return MongoClient(uri)
+
+@st.cache_data(show_spinner="⏳ جاري تحميل البيانات …")
+def load_all_data():
+    client = get_mongo_client()
+    db     = client["kayfa_analytics"]   # ← اسم قاعدة البيانات
+
+    def collection_to_df(name: str) -> pd.DataFrame:
+        df = pd.DataFrame(list(db[name].find()))
+        if "_id" in df.columns:
+            df.drop(columns=["_id"], inplace=True)
+        return df
+
+    # ── سحب الـ Collections ──
+    students    = collection_to_df("students_summary")
+    groups      = collection_to_df("groups")
+    courses     = collection_to_df("courses")
+    concepts    = collection_to_df("concepts")
+    engagement  = collection_to_df("engagement")
+    submissions = collection_to_df("submissions")
+    attendance  = collection_to_df("attendance")
+
+    # grades مخزّنة كـ nested documents → نفرد الـ grades array
+    raw_grades  = list(db["grades"].find())
+    for doc in raw_grades:
+        doc.pop("_id", None)
     grades = pd.json_normalize(
         raw_grades,
         record_path=["grades"],
-        meta=["student_id", "course_id", "group_id"]
-    )
-
-    # ── Excel attendance (دمج كل الـ sheets) ──
-    excel_file = pd.ExcelFile(os.path.join("attendance.xlsx"))
-    attendance = pd.concat(
-        [pd.read_excel(excel_file, sheet_name=s) for s in excel_file.sheet_names],
-        ignore_index=True
+        meta=["student_id", "course_id", "group_id"],
+        errors="ignore"
     )
 
     # ── Merge & clean final_df ──
-    merged = students.merge(groups,   on="group_id",   how="left", suffixes=("_student", "_group"))
-    merged = merged.merge(courses,    on="course_id",  how="left")
-    final_df = merged.merge(grades,   on="student_id", how="left", suffixes=("", "_grades"))
+    merged   = students.merge(groups,  on="group_id",  how="left", suffixes=("_student", "_group"))
+    merged   = merged.merge(courses,   on="course_id", how="left")
+    final_df = merged.merge(grades,    on="student_id", how="left", suffixes=("", "_grades"))
 
     # تنظيف الدرجات والأعمار
     final_df.dropna(subset=["score"], inplace=True)
-    final_df["age"]   = final_df["age"].abs()
-    final_df          = final_df[final_df["age"] <= 50]
+    final_df["age"] = final_df["age"].abs()
+    final_df        = final_df[final_df["age"] <= 50]
     final_df.loc[final_df["score"] < 0, "score"] = 0
 
     over_mask = final_df["score"] > final_df["max_score"]
     final_df.loc[over_mask, "score"] = final_df.loc[over_mask, "max_score"]
-    final_df["date"]  = pd.to_datetime(final_df["date"])
+    final_df["date"] = pd.to_datetime(final_df["date"])
 
     # تنظيف الحضور
     attendance["status_clean"] = attendance["status"].astype(str).str.strip().str.lower()
@@ -193,9 +215,10 @@ def load_all_data(data_dir: str):
 
 # تحميل البيانات مرة واحدة
 try:
-    final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_data(DATA_DIR)
+    final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_data()
 except Exception as e:
-    st.error(f"❌ خطأ في تحميل البيانات: {e}")
+    st.error(f"❌ خطأ في الاتصال بـ MongoDB أو تحميل البيانات: {e}")
+    st.info("💡 تأكد إن ملف `.streamlit/secrets.toml` موجود وفيه `[mongo] uri = ...`")
     st.stop()
 
 if final_analysis_df.empty:
