@@ -1,11 +1,5 @@
-make_subplots
 streamlit
 plotly
-numpy 
-pandas 
-seaborn 
-matplotlib
-datetime
-json
-os
-warnings
+numpy
+pandas
+seaborn
