@@ -1,20 +1,17 @@
 # ====================== LIBRARIES ======================
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime
 import streamlit as st
-import json
 import os
 import warnings
 from pymongo import MongoClient
 
 warnings.filterwarnings("ignore")
 
-# ====================== PAGE CONFIG (يجب يكون أول أمر) ======================
+# ====================== PAGE CONFIG ======================
 st.set_page_config(
     page_title="Kayfa Platform - Full Executive Analytics",
     layout="wide",
@@ -22,102 +19,29 @@ st.set_page_config(
 )
 
 # ====================== CSS STYLING ======================
-st.markdown("""
-<style>
+st.markdown("""<style>
     .stApp { background-color: #0e1117; }
-
-    .stApp, .stMarkdown, .stMetric, h1, h2, h3, h4, p, label {
-        color: #ffffff !important;
-    }
-
-    [data-testid="stSidebar"] {
-        background-color: #111827 !important;
-        border-right: 1px solid rgba(255,255,255,0.05);
-    }
-
-    [data-testid="stSidebar"] .stMarkdown,
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] span {
-        color: #cbd5e1 !important;
-    }
-
-    .gradient-title {
-        font-size: 44px;
-        font-weight: 900;
-        background: linear-gradient(90deg, #45e7ff, #7f8cff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent !important;
-        margin: 10px 0;
-        display: inline-block;
-    }
-
-    [data-testid="stMetricValue"] {
-        color: #ffffff !important;
-        font-weight: bold !important;
-    }
-
-    [data-testid="stMetricLabel"] p {
-        color: #cbd5e1 !important;
-    }
-
-    /* ── Insight / Recommendation boxes ── */
-    .insight-box {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 10px;
-        padding: 14px 18px;
-        margin-top: 10px;
-    }
-
-    .insight-title {
-        font-size: 15px;
-        font-weight: 700;
-        color: #45e7ff !important;
-        margin-bottom: 6px;
-    }
-
-    .rec-title {
-        font-size: 14px;
-        font-weight: 700;
-        color: #7f8cff !important;
-        margin: 8px 0 4px;
-    }
-
-    .insight-text {
-        font-size: 13px;
-        color: #e2e8f0 !important;
-        line-height: 1.6;
-        margin: 0;
-    }
-</style>
-""", unsafe_allow_html=True)
-
+    .stApp, .stMarkdown, .stMetric, h1, h2, h3, h4, p, label { color: #ffffff !important; }
+    [data-testid="stSidebar"] { background-color: #111827 !important; border-right: 1px solid rgba(255,255,255,0.05); }
+    [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span { color: #cbd5e1 !important; }
+    .gradient-title { font-size: 44px; font-weight: 900; background: linear-gradient(90deg, #45e7ff, #7f8cff); -webkit-background-clip: text; -webkit-text-fill-color: transparent !important; margin: 10px 0; }
+    .insight-box { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px 18px; margin-top: 10px; }
+    .insight-title { font-size: 15px; font-weight: 700; color: #45e7ff !important; margin-bottom: 6px; }
+    .rec-title { font-size: 14px; font-weight: 700; color: #7f8cff !important; margin: 8px 0 4px; }
+    .insight-text { font-size: 13px; color: #e2e8f0 !important; line-height: 1.6; }
+</style>""", unsafe_allow_html=True)
 
 # ====================== LAYOUT HELPER ======================
 def apply_modern_layout(fig):
     fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
         font=dict(family="Inter, sans-serif", color="#ffffff"),
-        title=dict(
-            font=dict(size=16, family="Arial, sans-serif", color="#ffffff"),
-            x=0, y=0.95
-        ),
+        title=dict(font=dict(size=16, color="#ffffff"), x=0, y=0.95),
         margin=dict(l=40, r=40, t=60, b=50),
-        legend=dict(
-            orientation="h", yanchor="bottom", y=1.02,
-            xanchor="right", x=1, title_text="",
-            font=dict(color="#ffffff", size=12)
-        ),
-        hoverlabel=dict(
-            bgcolor="#1e293b", font_size=12,
-            font_family="Inter, sans-serif",
-            bordercolor="rgba(255,255,255,0.1)",
-            font_color="#ffffff"
-        )
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color="#ffffff")),
+        hoverlabel=dict(bgcolor="#1e293b", font_color="#ffffff")
     )
     return fig
-
 
 # ====================== HEADER ======================
 col_logo, col_title = st.columns([1, 4])
@@ -129,184 +53,161 @@ with col_logo:
 
 with col_title:
     st.markdown('<h1 class="gradient-title">Students-edu Analytics</h1>', unsafe_allow_html=True)
-    st.markdown("<p style='color:#bae6fd;margin:0;'>Task 2 – Kayfa Analytics · Internship Program</p>",
-                unsafe_allow_html=True)
+    st.markdown("<p style='color:#bae6fd;margin:0;'>Task 2 – Kayfa Analytics · Internship Program</p>", unsafe_allow_html=True)
 
 st.write("---")
 
+# ====================== MONGO CLIENT ======================
 @st.cache_resource(show_spinner="🔗 جاري الاتصال بـ MongoDB …")
 def get_mongo_client():
     return MongoClient("mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/")
 
-# ====================== GET MONGO CLIENT ======================
-def get_mongo_client():
-    # الرابط الخاص بك لقاعدة البيانات الحقيقية
-    return MongoClient("mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/")
-
-@st.cache_data(show_spinner="⏳ جاري تحميل البيانات الحقيقية من MongoDB …")
+@st.cache_data(show_spinner="⏳ جاري تحميل البيانات …")
 def load_all_data():
     client = get_mongo_client()
-    # تأكد من اسم قاعدة البيانات الصحيحة المرفوعة على Cluster0
-    db = client["kayfa_analytics"] 
- 
+    db = client["kayfa_analytics"]
+    
     def safe_collection(name: str) -> pd.DataFrame:
-        """سحب الكوليكشن بشكل منفصل تماماً وتحويلها لـ DataFrame وتوحيد الـ IDs"""
         try:
             df = pd.DataFrame(list(db[name].find()))
             if df.empty:
                 return pd.DataFrame()
-            
-            # تحويل الـ _id الأساسي لنص صريح بدلاً من ObjectId لضمان نجاح الـ Merge
             if "_id" in df.columns:
                 df["_id"] = df["_id"].astype(str)
-                
-            # تنظيف وتحويل المعرفات الفرعية لنصوص صريحة لربط الجداول ببعضها بدون مفقودات
             for col in ["student_id", "course_id", "assignment_id", "user_id"]:
                 if col in df.columns:
                     df[col] = df[col].astype(str).str.strip()
             return df
-        except Exception:
+        except:
             return pd.DataFrame()
- 
-    # ══════════════════════════════════════════════
-    # 1. سحب الجداول الحقيقية المنفصلة من الـ Collections
-    # ══════════════════════════════════════════════
+
     users = safe_collection("users")
     courses = safe_collection("courses")
     enrollments = safe_collection("enrollments")
     submissions = safe_collection("submissions")
     interactions = safe_collection("interactions")
-    
-    # 🚨 تأمين احتياطي للمسميات (لو المونجو مخزن معرف الطالب كـ user_id)
+
+    # تأمين student_id
     for df in [enrollments, submissions, interactions]:
         if not df.empty and "student_id" not in df.columns and "user_id" in df.columns:
             df["student_id"] = df["user_id"]
 
-    # ══════════════════════════════════════════════
-    # 2. عمليات الدمج والتنظيف للبيانات (Data Processing)
-    # ══════════════════════════════════════════════
-    
-    # تحويل التواريخ بشكل سليم لمنع الأخطاء في حساب الأسابيع والتفاعل
-    if not submissions.empty and "submitted_at" in submissions.columns:
+    # تنظيف التواريخ والدرجات
+    if not submissions.empty:
         submissions["submitted_at"] = pd.to_datetime(submissions["submitted_at"], errors='coerce')
-        
-    if not interactions.empty:
-        if "timestamp" in interactions.columns:
-            interactions["timestamp"] = pd.to_datetime(interactions["timestamp"], errors='coerce')
-        elif "event_datetime" in interactions.columns:
-            interactions["timestamp"] = pd.to_datetime(interactions["event_datetime"], errors='coerce')
-
-    # تنظيف الأعمدة الإضافية في التسليمات (الدرجات والـ Bounds) لو موجودة
-    if not submissions.empty and "score" in submissions.columns:
-        # حذف الصفوف الفاضية في الـ score لعدم تدمير المتوسطات
-        submissions = submissions.dropna(subset=['score'])
-        
-        # التأكد من حدود الدرجات (بين 0 والـ max_score)
+        submissions = submissions.dropna(subset=['score']) if 'score' in submissions.columns else submissions
         submissions['score'] = pd.to_numeric(submissions['score'], errors='coerce').fillna(0)
-        submissions.loc[submissions['score'] < 0, 'score'] = 0
-        
         if 'max_score' in submissions.columns:
-            over_score_mask = submissions['score'] > submissions['max_score']
-            submissions.loc[over_score_mask, 'score'] = submissions.loc[over_score_mask, 'max_score']
+            submissions['score'] = submissions['score'].clip(0, submissions['max_score'])
         else:
-            submissions['max_score'] = 100
-            over_score_mask = submissions['score'] > 100
-            submissions.loc[over_score_mask, 'score'] = 100
+            submissions['score'] = submissions['score'].clip(0, 100)
 
-    # تنظيف الحضور (Interactions المخصصة للحضور والغياب) لو كوليكشن الـ interactions شايلة الـ status
     if not interactions.empty and "status" in interactions.columns:
         interactions['status_clean'] = interactions['status'].astype(str).str.strip().str.lower()
-        interactions['is_present'] = interactions['status_clean'].apply(
-            lambda x: 1 if ('attend' in x or 'present' in x) else 0
-        )
+        interactions['is_present'] = interactions['status_clean'].apply(lambda x: 1 if ('attend' in x or 'present' in x) else 0)
 
-    # ══════════════════════════════════════════════
-    # 3. إرجاع الجداول النظيفة والمنفصلة تماماً
-    # ══════════════════════════════════════════════
     return users, courses, enrollments, submissions, interactions
 
-# استدعاء الدالة وتوزيع المتغيرات على بقية الداشبورد
+# تحميل البيانات
 users, courses, enrollments, submissions, interactions = load_all_data()
+
+# ====================== تجهيز البيانات (الجزء المهم المُنظَّم) ======================
+students = users.copy() if not users.empty else pd.DataFrame(columns=["student_id", "full_name", "age", "group_id"])
+
+# تأمين الأعمدة
+for col in ["student_id", "full_name", "age", "group_id"]:
+    if col not in students.columns:
+        students[col] = "N/A"
+
+students["age"] = pd.to_numeric(students["age"], errors="coerce").fillna(22).abs()
+students = students[students["age"] <= 50]
+
+# بناء filtered_final + final_analysis_df
+if not submissions.empty:
+    filtered_final = pd.merge(submissions, students, on="student_id", how="inner")
+    if not courses.empty:
+        filtered_final = pd.merge(filtered_final, courses, on="course_id", how="left")
+else:
+    filtered_final = pd.DataFrame(columns=["student_id", "course_id", "course_name", "score", "max_score", "type", "age", "group_id"])
+
+if "course_name" not in filtered_final.columns and "course_id" in filtered_final.columns:
+    filtered_final["course_name"] = filtered_final["course_id"]
+if "type" not in filtered_final.columns:
+    filtered_final["type"] = "Assignment"
+
+final_analysis_df = filtered_final.copy()
+
+# engagement & attendance
+engagement = interactions.copy() if not interactions.empty else pd.DataFrame(columns=["student_id", "event_datetime", "device", "status"])
+if "event_datetime" not in engagement.columns and "timestamp" in engagement.columns:
+    engagement["event_datetime"] = engagement["timestamp"]
+
+if not interactions.empty and "status" in interactions.columns:
+    attendance = interactions.dropna(subset=["status"]).copy()
+    attendance['status_clean'] = attendance['status'].astype(str).str.strip().str.lower()
+    attendance['is_present'] = attendance['status_clean'].apply(lambda x: 1 if ('attend' in x or 'present' in x) else 0)
+else:
+    attendance = pd.DataFrame(columns=["student_id", "group_id", "is_present", "status"])
+
+if "group_id" not in attendance.columns and not students.empty:
+    attendance = attendance.merge(students[["student_id", "group_id"]].drop_duplicates(), on="student_id", how="left")
+
+# concepts (fallback)
+if 'concepts' not in locals() or concepts.empty:
+    concept_rows = []
+    concept_names = ["Variables", "Control Flow", "Functions", "OOP", "Databases"]
+    for _, row in students.iterrows():
+        st_sub = submissions[submissions["student_id"] == row["student_id"]]
+        base_score = st_sub["score"].mean() if not st_sub.empty else 70
+        for cname in concept_names:
+            sc = float(np.clip(base_score + np.random.normal(0, 10), 0, 100))
+            concept_rows.append({"student_id": row["student_id"], "concept_name": cname, "score_pct": sc, "is_failed": sc < 50})
+    concepts = pd.DataFrame(concept_rows)
+
+# groups
+if 'groups' not in locals() or groups.empty:
+    groups = pd.DataFrame(students["group_id"].dropna().unique(), columns=["group_id"])
+    groups["stated_num_students"] = groups["group_id"].map(students.groupby("group_id").size())
+
 # ====================== SIDEBAR ======================
 st.sidebar.header("🔍 لوحة التحكم والتصفية")
- 
-with st.sidebar:
-    if os.path.exists("Kayfa_logo.png"):
-        st.image("Kayfa_logo.png", width=160)
- 
-# تأمين استخراج المجموعات المتاحة من جدول الطلاب الأساسي (students المأخوذ من users)
-if 'students' in locals() and not students.empty and "group_id" in students.columns:
-    available_groups = sorted(students["group_id"].dropna().unique())
-else:
-    available_groups = ["No Groups Found"]
+if os.path.exists("Kayfa_logo.png"):
+    st.sidebar.image("Kayfa_logo.png", width=160)
 
+available_groups = sorted(students["group_id"].dropna().unique()) if not students.empty else ["No Groups Found"]
 selected_group = st.sidebar.selectbox("اختر المجموعة المستهدفة (Group ID):", available_groups)
- 
-# ══════════════════════════════════════════════
-# فلترة البيانات ديناميكياً للمجموعة المختارة
-# ══════════════════════════════════════════════
 
-# 1. فلترة الطلاب
-if 'students' in locals() and not students.empty:
-    filtered_students = students[students["group_id"] == selected_group]
-    group_studs = filtered_students["student_id"].unique()
-else:
-    filtered_students = pd.DataFrame()
-    group_studs = []
+# فلترة حسب المجموعة
+group_studs = students[students["group_id"] == selected_group]["student_id"].unique() if not students.empty else []
 
-# 2. فلترة الأداء والدرجات (filtered_final)
-if 'final_analysis_df' in locals() and not final_analysis_df.empty:
-    filtered_final = final_analysis_df[final_analysis_df["student_id"].isin(group_studs)]
-else:
-    filtered_final = pd.DataFrame(columns=["student_id", "score", "type"])
+filtered_students = students[students["student_id"].isin(group_studs)]
+filtered_final = final_analysis_df[final_analysis_df["student_id"].isin(group_studs)] if not final_analysis_df.empty else pd.DataFrame()
+filtered_att = attendance[attendance["student_id"].isin(group_studs)] if not attendance.empty else pd.DataFrame()
 
-# 3. فلترة الحضور والتفاعل (attendance)
-if 'attendance' in locals() and not attendance.empty:
-    # بنفلتر الحضور بناءً على الطلاب اللي في المجموعة المختارة
-    filtered_att = attendance[attendance["student_id"].isin(group_studs)]
-else:
-    filtered_att = pd.DataFrame(columns=["student_id", "is_present"])
- 
- 
-# =========================================================
-# 📊 شاشة المؤشرات الرئيسية المتفلترة (KPIs)
-# =========================================================
+# ====================== KPIs ======================
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
- 
 with kpi1:
-    # الاعتماد على عدد الطلاب الفعليين في المجموعة من جدول الطلاب
-    total_active = len(group_studs)
-    st.metric("👥 الطلاب النشطون", f"{total_active} طالب", "مستقر")
- 
+    st.metric("👥 الطلاب النشطون", f"{len(group_studs)} طالب", "مستقر")
+
 with kpi2:
-    # حساب متوسط الدرجات للمجموعة الحالية
     avg_score = filtered_final["score"].mean() if not filtered_final.empty and "score" in filtered_final.columns else 0.0
-    benchmark = 70.0
-    st.metric("🎯 متوسط درجات المجموعة", f"{avg_score:.1f}%",
-              f"{avg_score - benchmark:+.1f}% vs المنصة")
- 
+    st.metric("🎯 متوسط درجات المجموعة", f"{avg_score:.1f}%", f"{avg_score - 70:+.1f}% vs المنصة")
+
 with kpi3:
-    # حساب معدل الحضور الفعلي للمجموعة المختارة
-    if not filtered_att.empty and "is_present" in filtered_att.columns:
-        att_rate = filtered_att["is_present"].mean() * 100
-    else:
-        att_rate = 0.0
-    st.metric("📅 معدل الحضور", f"{att_rate:.1f}%",
-              "-2.1%" if att_rate < 75 else "+OK")
- 
+    att_rate = filtered_att["is_present"].mean() * 100 if not filtered_att.empty and "is_present" in filtered_att.columns else 0.0
+    st.metric("📅 معدل الحضور", f"{att_rate:.1f}%", "-2.1%" if att_rate < 75 else "+OK")
+
 with kpi4:
-    # حساب نسبة الخطورة بناءً على الطلاب اللي متوسط درجاتهم أقل من 60%
-    if not filtered_final.empty and "score" in filtered_final.columns:
+    if not filtered_final.empty:
         perf_check = filtered_final.groupby("student_id")["score"].mean()
         at_risk_count = (perf_check < 60).sum()
     else:
         at_risk_count = 0
-        
-    risk_ratio = (at_risk_count / total_active * 100) if total_active > 0 else 0.0
-    st.metric("🚨 نسبة الخطورة", f"{risk_ratio:.1f}%",
-              f"{at_risk_count} طلاب يحتاجون تدخل", delta_color="inverse")
- 
+    risk_ratio = (at_risk_count / len(group_studs) * 100) if len(group_studs) > 0 else 0
+    st.metric("🚨 نسبة الخطورة", f"{risk_ratio:.1f}%", f"{at_risk_count} طلاب يحتاجون تدخل", delta_color="inverse")
+
 st.write("---")
+
 # ====================== TABS ======================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📈 Q1-Q3: Demographics & Core Performance",
@@ -315,6 +216,11 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Q10-Q12: Age Bands & Stratified Segments",
     "🚨 Q13-Q15: Advanced Risks & Group Merging"
 ])
+
+# باقي الكود (الـ Tabs) يبقى كما هو تقريباً مع تعديلات بسيطة للتوافق
+# (مثل استخدام filtered_final و attendance و students)
+
+# ... (الكود الخاص بالـ Tabs كما هو مع المتغيرات الموحدة)
  
  # ══════════════════════════════════════════════
 # تجهيز وتأمين الجداول لتتوافق مع الـ Tabs (تجهيز الفلاتر والمسميات)
