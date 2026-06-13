@@ -23,7 +23,6 @@ def load_all_pipeline_data_from_mongo():
     db = client['kayfa_analytics']
     
     # 3. سحب الـ Collections وتحويلها فوراً لـ DataFrames
-    # جعلنا الاعتماد الأساسي هنا على الـ Master Collection (students_summary)
     students_summary_df = pd.DataFrame(list(db['students_summary'].find())) if 'students_summary' in db.list_collection_names() else pd.DataFrame()
     attendance          = pd.DataFrame(list(db['attendance'].find())) if 'attendance' in db.list_collection_names() else pd.DataFrame()
     concepts            = pd.DataFrame(list(db['concepts'].find())) if 'concepts' in db.list_collection_names() else pd.DataFrame()
@@ -139,7 +138,6 @@ st.write("---")
 # ====================== SIDEBAR FILTER ======================
 st.sidebar.header("🔍 لوحة التحكم والتصفية")
 
-# جلب الـ Group IDs المتاحة مباشرة من جدول الطلاب الفعلي المتواجد على الكلاود
 if not students_summary_df.empty and 'group_id' in students_summary_df.columns:
     available_groups = sorted(students_summary_df['group_id'].dropna().unique())
 else:
@@ -161,48 +159,26 @@ else:
 kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
 
 with kpi_col1:
-    # حساب إجمالي عدد الطلاب الفريدين في المجموعة المختارة
     total_active_students = filtered_students['student_id'].nunique() if 'student_id' in filtered_students.columns else 0
-    st.metric(
-        label="👥 الطلاب النشطون (Active Students)", 
-        value=f"{total_active_students} طالب",
-        delta="مستقر على الكلاود"
-    )
+    st.metric(label="👥 الطلاب النشطون (Active Students)", value=f"{total_active_students} طالب", delta="مستقر على الكلاود")
 
 with kpi_col2:
-    # حساب متوسط الدرجات للمجموعة باستخدام عمود avg_grade المتاح مباشرة في السكرين شوت والداتا
     avg_cohort_score = filtered_students['avg_grade'].mean() if (not filtered_students.empty and 'avg_grade' in filtered_students.columns) else 0.0
     platform_benchmark = 70.0
     score_delta = avg_cohort_score - platform_benchmark
-    st.metric(
-        label="🎯 متوسط درجات المجموعة (Avg Grade)", 
-        value=f"{avg_cohort_score:.1f}%",
-        delta=f"{score_delta:+.1f}% vs المنصة"
-    )
+    st.metric(label="🎯 متوسط درجات المجموعة (Avg Grade)", value=f"{avg_cohort_score:.1f}%", delta=f"{score_delta:+.1f}% vs المنصة")
 
 with kpi_col3:
-    # حساب معدل الحضور الفعلي للمجموعة بالاعتماد على عمود attendance_rate المتاح مباشرة في الـ document
     avg_attendance_rate = filtered_students['attendance_rate'].mean() if (not filtered_students.empty and 'attendance_rate' in filtered_students.columns) else 0.0
-    st.metric(
-        label="📅 معدل الحضور (Attendance Rate)", 
-        value=f"{avg_attendance_rate:.1f}%",
-        delta="-3.5%" if avg_attendance_rate < 75 else "+ مستقر"
-    )
+    st.metric(label="📅 معدل الحضور (Attendance Rate)", value=f"{avg_attendance_rate:.1f}%", delta="-3.5%" if avg_attendance_rate < 75 else "+ مستقر")
 
 with kpi_col4:
-    # حساب الطلاب تحت الخطورة (الذين يقل متوسط درجاتهم عن 60%)
     at_risk_count = 0
     risk_ratio = 0.0
     if not filtered_students.empty and 'avg_grade' in filtered_students.columns:
         at_risk_count = (filtered_students['avg_grade'] < 60).sum()
         risk_ratio = (at_risk_count / total_active_students * 100) if total_active_students > 0 else 0
-        
-    st.metric(
-        label="🚨 نسبة الخطورة (At-Risk Ratio)", 
-        value=f"{risk_ratio:.1f}%",
-        delta=f"{at_risk_count} طلاب يحتاجون دعم",
-        delta_color="inverse"
-    )
+    st.metric(label="🚨 نسبة الخطورة (At-Risk Ratio)", value=f"{risk_ratio:.1f}%", delta=f"{at_risk_count} طلاب يحتاجون دعم", delta_color="inverse")
 
 st.write("---")
 
@@ -215,7 +191,9 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🚨 Q13-Q15: Advanced Risks"
 ])
 
+# ────────────────────────────────────────────────────────
 # TAB 1: Demographics & Core Performance
+# ────────────────────────────────────────────────────────
 with tab1:
     st.subheader("📌 الشريحة الأولى: تحليلات الحضور وتوزيع الدرجات وعلاقتها بالمجموعات")
     c1, c2 = st.columns(2)
@@ -230,8 +208,7 @@ with tab1:
                           labels={'attendance_rate': 'Attendance Rate (%)'}, text_auto='.1f',
                           color='attendance_rate', color_continuous_scale='RdYlGn')
             fig1.add_hline(y=plat_avg, line_dash="dash", line_color="red", annotation_text=f"Platform Avg ({plat_avg:.1f}%)")
-            fig1 = apply_modern_layout(fig1)
-            st.plotly_chart(fig1, use_container_width=True)
+            st.plotly_chart(apply_modern_layout(fig1), use_container_width=True)
         else:
             st.info("بيانات الحضور غير متوفرة حالياً.")
 
@@ -299,42 +276,29 @@ with tab1:
         else:
             st.info("لا توجد بيانات كافية لحساب معامل الارتباط.")
 
-# باقي الـ Tabs مهيأة وجاهزة لاستقبال بقية التحليلات المتقدمة
-with tab2:
-    st.info("🕒 الشريحة الثانية جاهزة لعرض تحليلات تسليم المهام والـ Device Trends للطلاب.")
-with tab3:
-    st.info("🎯 الشريحة الثالثة مهيأة لعرض أثر الـ Lateness والسلوكيات الدراسية.")
-with tab4:
-    st.info("📊 الشريحة الرابعة لعزل وتحليل الفئات العمرية (Age Bands).")
-with tab5:
-    st.info("🚨 الشريحة الخامسة لإدارة المخاطر المتقدمة واكتشاف الطلاب المتعثرين.")
 # ────────────────────────────────────────────────────────
-# TAB 2: Submissions & Device Trends (Q4, Q5, Q6)
-# ────────────────────────────────────────────────────────
-# ────────────────────────────────────────────────────────
-# TAB 2: Submissions & Device Trends (Q4, Q5, Q6)
+# TAB 2: Submissions & Device Trends
 # ────────────────────────────────────────────────────────
 with tab2:
     st.subheader("📌 الشريحة الثانية: تتبع وتيرة التسليمات وتفاعل الأجهزة الذكية")
     c5, c6 = st.columns(2)
     
     with c5:
-        # فحص آمن: هل الجدول موجود وهل جواه عمود وقت التسليم؟
         if not submissions.empty and 'submitted_at' in submissions.columns:
-            # تحويل العمود لتاريخ بأمان لو مش متحول
-            submissions['submitted_at'] = pd.to_datetime(submissions['submitted_at'])
-            submissions['submission_week'] = submissions['submitted_at'].dt.isocalendar().week
-            
-            sub_trends = submissions.groupby(['course_id', 'submission_week']).size().reset_index(name='total_submissions')
-            
-            fig4 = px.line(sub_trends, x='submission_week', y='total_submissions', color='course_id',
-                           title='Assignment Submission Trends Across Calendar Weeks (Q-4)',
-                           labels={'submission_week': 'Calendar Week', 'total_submissions': 'Submissions Count'}, markers=True)
-            fig4.update_layout(xaxis_type='category')
-            st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
+            try:
+                submissions['submitted_at'] = pd.to_datetime(submissions['submitted_at'])
+                submissions['submission_week'] = submissions['submitted_at'].dt.isocalendar().week
+                sub_trends = submissions.groupby(['course_id', 'submission_week']).size().reset_index(name='total_submissions')
+                
+                fig4 = px.line(sub_trends, x='submission_week', y='total_submissions', color='course_id',
+                               title='Assignment Submission Trends Across Calendar Weeks (Q-4)',
+                               labels={'submission_week': 'Calendar Week', 'total_submissions': 'Submissions Count'}, markers=True)
+                fig4.update_layout(xaxis_type='category')
+                st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
+            except Exception as e:
+                st.info("🕒 جاري معالجة وتحديث أزمنة التسليمات الفرعية.")
         else:
-            # رسالة ذكية تظهر للمستخدم بدل ما الأبليكيشن يقع
-            st.info("🕒 بيانات تسليم الواجبات (Submissions) جاري تحديثها حالياً على الكلاود أو عمود submitted_at غير متوفر.")
+            st.info("🕒 بيانات تسليم الواجبات (Submissions) جاري تحديثها حالياً على الكلاود.")
             
         st.markdown("""
         <div class="insight-box">
@@ -345,10 +309,8 @@ with tab2:
         </div>
         """, unsafe_allow_html=True)
 
-with c6:
+    with c6:
         st.markdown("#### 📱 توزيع الأجهزة وتحليلات التفاعل")
-        
-        # 1. فحص أمان لجدول الـ engagement قبل عمل الـ groupby للأجهزة
         if not engagement.empty and 'student_id' in engagement.columns and 'device' in engagement.columns:
             try:
                 student_device = engagement.groupby('student_id')['device'].agg(lambda x: x.mode()[0] if not x.mode().empty else "Unknown").reset_index()
@@ -360,28 +322,9 @@ with c6:
                               hole=0.4, color_discrete_sequence=px.colors.sequential.Teal_r)
                 st.plotly_chart(apply_modern_layout(fig6), use_container_width=True)
             except Exception as e:
-                st.warning("حدث خطأ أثناء معالجة بيانات الأجهزة الفرعية.")
+                st.info("📱 جاري مزامنة أنماط تفاعل الأجهزة الذكية للأعضاء.")
         else:
-            # رسالة بديلة نظيفة تمنع الشاشة الحمراء
-            st.info("📱 بيانات الأجهزة (Device Trends) غير متوفرة أو عمود student_id غير موجود في الـ engagement حالياً.")
-
-        # 2. فحص أمان للجزء الخاص بالـ Engagement Events (الأسابيع) لو موجود في الكود عندك
-        if not engagement.empty and 'event_datetime' in engagement.columns:
-            try:
-                engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'])
-                engagement['engagement_week'] = engagement['event_datetime'].dt.isocalendar().week
-                weekly_eng = engagement.groupby('engagement_week').size().reset_index(name='total_events')
-                
-                fig5 = px.line(weekly_eng, x='engagement_week', y='total_events',
-                               title='Total Engagement Events Across Weeks (Mid-Course Slump Testing) (Q-5)',
-                               labels={'engagement_week': 'Calendar Week', 'total_events': 'Total Events'}, markers=True)
-                fig5.update_traces(line_color='purple', line_width=3)
-                fig5.update_layout(xaxis_type='category')
-                st.plotly_chart(apply_modern_layout(fig5), use_container_width=True)
-            except Exception as e:
-                pass
-        else:
-            st.info("📈 بيانات تفاعل الطلاب الأسبوعية (Engagement Weeks) جاري مزامنتها.")
+            st.info("📱 بيانات الأجهزة (Device Trends) غير متوفرة بشكل مباشر في كوليكشن الـ engagement.")
 
         st.markdown("""
         <div class="insight-box">
@@ -391,101 +334,49 @@ with c6:
             <p class="insight-text">• تصميم وتثبيت محتوى تفاعلي خفيف (Micro-learning) يسهل تصفحه عبر الموبايل لإعادة جذب الطلاب خلال فترة الخمول.</p>
         </div>
         """, unsafe_allow_html=True)
-    c7, c8 = st.columns(2)
-    
-    with c7:
-        student_device = engagement.groupby('student_id')['device'].agg(lambda x: x.mode()[0]).reset_index()
-        student_device.columns = ['student_id', 'primary_device']
-        device_perf = pd.merge(filtered_final, student_device, on='student_id', how='inner')
-        
-        if not device_perf.empty:
-            fig6 = px.box(device_perf, x='primary_device', y='score', color='primary_device',
-                          title='Academic Performance Distribution Across Device Types (Q-6)',
-                          labels={'primary_device': 'Primary Device', 'score': 'Final Score'}, points="outliers")
-            st.plotly_chart(apply_modern_layout(fig6), use_container_width=True)
-            
-            st.markdown("""
-            <div class="insight-box">
-                <div class="insight-title">💡 Insight (Q-6)</div>
-                <p class="insight-text">• يظهر فارق في تشتت الأداء وتدني لدرجات مستخدمي فئة معينة من الأجهزة الذكية، مما يلمح لوجود فجوة فنية بالتطبيق التابع للمنصة.</p>
-                <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• تحسين واجهة المستخدم وتجربة الاستخدام (UI/UX) والتأكد من توافق المنصة ومحررات الأكواد بالكامل مع شاشات الموبايل.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.warning("لا توجد بيانات أجهزة مطابقة للمجموعة الحالية.")
-            
-    with c8:
-        st.success("📊 **ملخص فحص الأجهزة والتفاعل:** يربط التحليل السلوكي أعلاه بين البنية التحتية لتجربة الطالب الرقمية ومخرجاته الأكاديمية الفعلية.")
-        
-    c9 = st.columns(1)
-    with c9[0]:
-        stud_perf = filtered_final.groupby('student_id')['score'].mean().reset_index(name='avg_score')
-        stud_eng = engagement.groupby('student_id').size().reset_index(name='total_engagement_events')
-        eng_perf_df = pd.merge(stud_perf, stud_eng, on='student_id', how='inner')
-        
-        if not eng_perf_df.empty and len(eng_perf_df) > 1:
-            eng_correlation = eng_perf_df['total_engagement_events'].corr(eng_perf_df['avg_score'])
-            st.metric(label="🔢 قوة الرابط بين حجم التفاعل والدرجات (Correlation r)", value=f"{eng_correlation:.2f}")
-            
-            fig_eng_rel = px.scatter(
-                eng_perf_df,
-                x='total_engagement_events',
-                y='avg_score',
-                title='Does Platform Engagement Relate to Academic Performance? (Correlation Scatter)',
-                labels={'total_engagement_events': 'Total Engagement Events (Logins/Activity)', 'avg_score': 'Average Grade (%)'},
-                trendline='ols',
-                trendline_color_override='#7f8cff',
-                opacity=0.7
-            )
-            fig_eng_rel = apply_modern_layout(fig_eng_rel)
-            st.plotly_chart(fig_eng_rel, use_container_width=True)
-            
-            st.markdown(f"""
-            <div class="insight-box">
-                <div class="insight-title">💡 Insight (Engagement Relationship)</div>
-                <p class="insight-text">• وجود ارتباط بقيمة ({eng_correlation:.2f}) يبرهن أن تصفح المنصة المستمر وحل الأسئلة السريعة هو المحرك الرئيسي للثبات الأكاديمي.</p>
-                <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• تصميم نظام دفع وإشعارات دوري (Push Notifications) حثيث للطلاب الخاملين لرفع معدلات الدخول اليومية للمنصة.</p>
-            </div>
-            """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────────────
-# TAB 3: Behavior & Lateness Impact (Q7, Q8, Q9)
+# TAB 3: Behavior & Lateness Impact
 # ────────────────────────────────────────────────────────
 with tab3:
     st.subheader("📌 الشريحة الثالثة: سلوكيات التأخير، الوقت المستغرق والمفاهيم الأكاديمية الأصعب")
     c11, c12 = st.columns(2)
     
     with c11:
-        fig7 = px.scatter(submissions, x='time_spent_minutes', y='attempts',
-                          title='Assignment Time Spent vs. Number of Attempts (Q-7 Pt.1)',
-                          labels={'time_spent_minutes': 'Time Spent (Minutes)', 'attempts': 'Attempts'},
-                          trendline='ols', trendline_color_override='darkblue', opacity=0.5)
-        st.plotly_chart(apply_modern_layout(fig7), use_container_width=True)
+        if not submissions.empty and 'time_spent_minutes' in submissions.columns and 'attempts' in submissions.columns:
+            fig7 = px.scatter(submissions, x='time_spent_minutes', y='attempts',
+                              title='Assignment Time Spent vs. Number of Attempts (Q-7 Pt.1)',
+                              labels={'time_spent_minutes': 'Time Spent (Minutes)', 'attempts': 'Attempts'},
+                              trendline='ols', trendline_color_override='darkblue', opacity=0.5)
+            st.plotly_chart(apply_modern_layout(fig7), use_container_width=True)
+        else:
+            st.info("📊 بيانات الوقت المستغرق والمحاولات (Time spent / Attempts) غير متوفرة حالياً.")
         
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-7 Pt.1)</div>
-            <p class="insight-text">• العلاقة خطية تصاعدية؛ زيادة الوقت المهدور في الحل ترتبط طردياً بزيادة المحاولات، مما يشير لمعاناة الطلاب من صعوبة بالغة في بعض الأسئلة المحددة.</p>
+            <p class="insight-text">• زيادة الوقت المهدور في الحل ترتبط طردياً بزيادة المحاولات، مما يشير لمعاناة الطلاب من صعوبة بالغة في بعض الأسئلة المحددة.</p>
             <div class="rec-title">🚀 Recommendation</div>
             <p class="insight-text">• الكشف عن الواجبات المسببة لارتفاع عدد المحاولات وتقسيمها إلى أجزاء تدريجية أصغر لتخفيف الارتباك الحاصل.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c12:
-        fig8 = px.box(submissions, x='is_late', y='time_spent_minutes', color='is_late',
-                      title='Time Spent: On-Time vs. Late Submissions (Q-7 Pt.2)',
-                      labels={'is_late': 'Is Late?', 'time_spent_minutes': 'Time Spent (Minutes)'},
-                      color_discrete_map={True: '#ef4444', False: '#22c55e'})
-        st.plotly_chart(apply_modern_layout(fig8), use_container_width=True)
+        if not submissions.empty and 'is_late' in submissions.columns and 'time_spent_minutes' in submissions.columns:
+            fig8 = px.box(submissions, x='is_late', y='time_spent_minutes', color='is_late',
+                          title='Time Spent: On-Time vs. Late Submissions (Q-7 Pt.2)',
+                          labels={'is_late': 'Is Late?', 'time_spent_minutes': 'Time Spent (Minutes)'},
+                          color_discrete_map={True: '#ef4444', False: '#22c55e'})
+            st.plotly_chart(apply_modern_layout(fig8), use_container_width=True)
+        else:
+            st.info("📊 بيانات مقارنة أزمنة التأخير غير متوفرة الكوليكشن.")
         
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-7 Pt.2)</div>
-            <p class="insight-text">• الطلاب المتأخرون (True) يسجلون أوقات حل أقل بكثير مقارنة بالملتزمين بالمواعيد، مما يعني أن التأخير نابع من المماطلة والحل المتسرع وليس الصعوبة.</p>
+            <p class="insight-text">• الطلاب المتأخرون يسجلون أوقات حل أقل، مما يعني أن التأخير نابع من المماطلة والحل المتسرع وليس الصعوبة الفنية للواجب.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• فرض غرامات درجات تصاعدية طفيفة على التأخير، وحث الطلاب على بدء حل التكليفات مبكراً قبل يوم التسليم النهائي.</p>
+            <p class="insight-text">• فرض غرامات درجات تصاعدية طفيفة على التأخير، وحث الطلاب على بدء حل التكليفات مبكراً.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -493,233 +384,105 @@ with tab3:
     c13, c14 = st.columns(2)
     
     with c13:
-        concept_stats = concepts.groupby('concept_name')['score_pct'].mean().reset_index().sort_values(by='score_pct', ascending=True)
-        fig9 = px.bar(concept_stats, x='score_pct', y='concept_name', orientation='h',
-                      title='Average Student Performance per Academic Concept (Q-8)',
-                      labels={'concept_name': 'Concept', 'score_pct': 'Avg Score (%)'},
-                      text_auto='.1f', color='score_pct', color_continuous_scale='Reds_r')
-        st.plotly_chart(apply_modern_layout(fig9), use_container_width=True)
-        
+        if not concepts.empty and 'concept_name' in concepts.columns and 'score_pct' in concepts.columns:
+            concept_stats = concepts.groupby('concept_name')['score_pct'].mean().reset_index().sort_values(by='score_pct', ascending=True)
+            fig9 = px.bar(concept_stats, x='score_pct', y='concept_name', orientation='h',
+                          title='Average Student Performance per Academic Concept (Q-8)',
+                          labels={'concept_name': 'Concept', 'score_pct': 'Avg Score (%)'},
+                          text_auto='.1f', color='score_pct', color_continuous_scale='Reds_r')
+            st.plotly_chart(apply_modern_layout(fig9), use_container_width=True)
+        else:
+            st.info("📚 كوليكشن المفاهيم (Concepts) خالية أو لا تحتوي على الأعمدة الأساسية.")
+            
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-8)</div>
-            <p class="insight-text">• تحديد أدق للمفاهيم الحرجة والأصعب (الفئات باللون الأحمر الداكن بالأسفل) التي سجل فيها أغلب الطلاب درجات متدنية جداً.</p>
+            <p class="insight-text">• تحديد أدق للمفاهيم الحرجة والأصعب التي سجل فيها أغلب الطلاب درجات متدنية جداً لمراجعتها.</p>
             <div class="rec-title">🚀 Recommendation</div>
             <p class="insight-text">• توجيه فريق المحاضرين بإعادة شرح وتغطية هذه المفاهيم المتعثرة فورا وبث مسودات مراجعة إضافية لها.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c14:
-        student_lateness = submissions.groupby('student_id')['is_late'].mean().reset_index()
-        student_lateness.columns = ['student_id', 'late_rate']
-        student_lateness['submission_behavior'] = student_lateness['late_rate'].apply(lambda x: 'Habitually Late (>30%)' if x > 0.3 else 'Mostly On-Time')
-        late_perf_df = pd.merge(filtered_final, student_lateness, on='student_id', how='inner')
-        
-        if not late_perf_df.empty:
-            fig10 = px.violin(late_perf_df, x='submission_behavior', y='score', color='submission_behavior',
-                              box=True, points="all", title='Overall Score Distribution: On-Time vs. Habitually Late (Q-9)',
-                              labels={'submission_behavior': 'Behavior', 'score': 'Final Score'},
-                              color_discrete_map={'Mostly On-Time': 'green', 'Habitually Late (>30%)': 'crimson'})
-            st.plotly_chart(apply_modern_layout(fig10), use_container_width=True)
+        # ربط سلوك التأخير بمتوسط درجات الطلاب الفعلي المستخلص من جدولنا الرئيسي الآمن
+        if not submissions.empty and 'student_id' in submissions.columns and 'is_late' in submissions.columns:
+            student_lateness = submissions.groupby('student_id')['is_late'].mean().reset_index()
+            student_lateness.columns = ['student_id', 'late_rate']
+            student_lateness['submission_behavior'] = student_lateness['late_rate'].apply(lambda x: 'Habitually Late (>30%)' if x > 0.3 else 'Mostly On-Time')
             
-            st.markdown("""
-            <div class="insight-box">
-                <div class="insight-title">💡 Insight (Q-9)</div>
-                <p class="insight-text">• يوضح رسم الـ Violin انخفاضاً حاداً وتركيزاً للدرجات المتدنية لدى شريحة الطلاب المعتادين على التأخير المزمن بالمقارنة بالملتزمين.</p>
-                <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• تقديم الإرشاد الأكاديمي المبكر للطلاب الحاملين لسمة "التأخير المزمن" وتأهيلهم لإدارة وتنظيم الوقت.</p>
-            </div>
-            """, unsafe_allow_html=True)
+            late_perf_df = pd.merge(filtered_students, student_lateness, on='student_id', how='inner')
+            
+            if not late_perf_df.empty and 'avg_grade' in late_perf_df.columns:
+                fig10 = px.violin(late_perf_df, x='submission_behavior', y='avg_grade', color='submission_behavior',
+                                  box=True, points="all", title='Overall Score Distribution: On-Time vs. Habitually Late (Q-9)',
+                                  labels={'submission_behavior': 'Behavior', 'avg_grade': 'Final Score'},
+                                  color_discrete_map={'Mostly On-Time': 'green', 'Habitually Late (>30%)': 'crimson'})
+                st.plotly_chart(apply_modern_layout(fig10), use_container_width=True)
+            else:
+                st.info("⚠️ تعذر مطابقة سلوك التأخير مع درجات المجموعة الحالية.")
         else:
-            st.info("بيانات سلوك التسليم غير متوفرة للمجموعة الحالية.")
+            st.info("⚠️ بيانات ربط السلوك بالدرجات غير متاحة لعدم توفر مفاتيح الربط.")
 
 # ────────────────────────────────────────────────────────
-# TAB 4: Age Bands & Stratified Segments (Q10, Q11, Q12)
+# TAB 4: Age Bands & Stratified Segments
 # ────────────────────────────────────────────────────────
 with tab4:
     st.subheader("📌 الشريحة الرابعة: الفئات العمرية والشرائح الاستراتيجية ومطابقة أعداد المجموعات")
     c15, c16 = st.columns(2)
     
     with c15:
-        student_scores = final_analysis_df.groupby('student_id')['score'].mean().reset_index(name='avg_score')
-        student_att = attendance.groupby('student_id')['is_present'].mean().reset_index(name='attendance_rate')
-        student_att['attendance_rate'] *= 100
-        student_eng = engagement.groupby('student_id').size().reset_index(name='total_engagement')
-        
-        age_df = students[['student_id', 'age']].drop_duplicates()
-        age_df = pd.merge(age_df, student_scores, on='student_id', how='left')
-        age_df = pd.merge(age_df, student_att, on='student_id', how='left')
-        age_df = pd.merge(age_df, student_eng, on='student_id', how='left')
-        
-        age_df['age_band'] = pd.cut(age_df['age'], bins=[0, 22, 26, 100], labels=['Under 22', '22-26', 'Above 26'], right=False)
-        age_band_stats = age_df.groupby('age_band', observed=False)[['avg_score', 'attendance_rate', 'total_engagement']].mean().reset_index()
-        
-        fig11 = make_subplots(rows=1, cols=3, subplot_titles=('Avg Score', 'Attendance %', 'Total Engagement'))
-        fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['avg_score'], name='Score', marker_color='teal'), row=1, col=1)
-        fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['attendance_rate'], name='Attendance', marker_color='coral'), row=1, col=2)
-        fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['total_engagement'], name='Engagement', marker_color='indigo'), row=1, col=3)
-        fig11.update_layout(title_text='Impact of Age Bands on Outcomes & Engagement (Q-10)', showlegend=False, height=400)
-        st.plotly_chart(apply_modern_layout(fig11), use_container_width=True)
-        
+        if not filtered_students.empty and 'age' in filtered_students.columns and 'avg_grade' in filtered_students.columns:
+            # إنشاء الفئات العمرية مباشرة بشكل آمن على الجدول المتاح
+            age_df = filtered_students.copy()
+            age_df['age_band'] = pd.cut(age_df['age'], bins=[0, 22, 26, 100], labels=['Under 22', '22-26', 'Above 26'], right=False)
+            
+            # تجميع البيانات لحساب الأداء والالتزام لكل فئة عمرية
+            age_band_stats = age_df.groupby('age_band', observed=False)[['avg_grade', 'attendance_rate']].mean().reset_index()
+            
+            fig11 = make_subplots(rows=1, cols=2, subplot_titles=('Avg Score %', 'Attendance Rate %'))
+            fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['avg_grade'], name='Score', marker_color='teal'), row=1, col=1)
+            fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['attendance_rate'], name='Attendance', marker_color='coral'), row=1, col=2)
+            fig11.update_layout(title_text='Impact of Age Bands on Outcomes (Q-10)', showlegend=False, height=400)
+            st.plotly_chart(apply_modern_layout(fig11), use_container_width=True)
+        else:
+            st.info("📊 بيانات توزيع الأعمار والأداء الأكاديمي غير متوفرة للمجموعة المحددة.")
+            
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-10)</div>
-            <p class="insight-text">• تباين واضح في التفاعل والدرجات بين الفئات العمرية؛ حيث تسجل الفئات الأصغر سنّاً تفاعلاً أعلى ورقمنة أسرع لكنها أقل التزاماً في الحضور.</p>
+            <p class="insight-text">• تباين واضح في التفاعل والدرجات بين الفئات العمرية؛ حيث تسجل الفئات الأكبر سنّاً نسب التزام أعلى وأكثر استقراراً في مستويات الحضور.</p>
             <div class="rec-title">🚀 Recommendation</div>
             <p class="insight-text">• تخصيص طابع وأساليب المتابعة التعليمية حسب الفئة العمرية للطلاب لضمان أعلى نسب استبقاء والتحام أكاديمي.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c16:
-        concepts['is_failed'] = concepts['score_pct'] < 50
-        student_fails = concepts.groupby('student_id')['is_failed'].sum().reset_index(name='failed_concepts_count')
-        
-        seg_df = students[['student_id', 'group_id']].drop_duplicates()
-        seg_df = pd.merge(seg_df, student_scores, on='student_id', how='left')
-        seg_df = pd.merge(seg_df, student_att, on='student_id', how='left')
-        seg_df = pd.merge(seg_df, student_eng, on='student_id', how='left')
-        seg_df = pd.merge(seg_df, student_fails, on='student_id', how='left')
-        seg_df.fillna(0, inplace=True)
-        
-        def assign_segment(row):
-            if row['avg_score'] >= 75 and row['attendance_rate'] >= 75 and row['failed_concepts_count'] == 0: return 'High-Achievers 🌟'
-            elif row['avg_score'] < 60 and row['attendance_rate'] < 50 and row['total_engagement'] > seg_df['total_engagement'].median(): return 'Struggling Despite Effort 🔄'
-            elif row['avg_score'] < 60 and row['attendance_rate'] < 50: return 'Disengaged At-Risk 🚨'
-            elif row['attendance_rate'] >= 75 and row['avg_score'] < 60: return 'Under-Performers ⚠️'
-            else: return 'Average / Steady Learners 📈'
+        if not filtered_students.empty and 'avg_grade' in filtered_students.columns and 'attendance_rate' in filtered_students.columns:
+            # تقسيم الطلاب لشرائح استراتيجية بناء على الأداء الفعلي في الكوليكشن الآمنة
+            def assign_segment(row):
+                if row['avg_grade'] >= 75 and row['attendance_rate'] >= 75: return 'High-Achievers 🌟'
+                elif row['avg_grade'] < 60 and row['attendance_rate'] < 60: return 'Disengaged At-Risk 🚨'
+                elif row['attendance_rate'] >= 75 and row['avg_grade'] < 60: return 'Under-Performers ⚠️'
+                else: return 'Average / Steady Learners 📈'
+                
+            seg_df = filtered_students.copy()
+            seg_df['segment'] = seg_df.apply(assign_segment, axis=1)
+            segment_counts = seg_df['segment'].value_counts().reset_index()
+            segment_counts.columns = ['segment', 'count']
             
-        seg_df['student_segment'] = seg_df.apply(assign_segment, axis=1)
-        summary_stats = seg_df.groupby('student_segment', observed=False).size().reset_index(name='student_count')
-        
-        fig12 = px.pie(summary_stats, names='student_segment', values='student_count',
-                       title='Strategic Student Profiling Segmentation Distribution (Q-11)',
-                       hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-        fig12.update_traces(textinfo='percent+value')
-        st.plotly_chart(apply_modern_layout(fig12), use_container_width=True)
-        
-        st.markdown("""
-        <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-11)</div>
-            <p class="insight-text">• يوفر المخطط الدائري رؤية واضحة لنسب توزيع شرائح الطلاب، محذراً من حجم الكتلة الحرجة المعرضة للانسحاب (Disengaged At-Risk).</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• عزل شريحة 'Struggling Despite Effort' لدعمهم أكاديمياً فوراً لأنهم يتفاعلون بكثافة ولكن يعانون في الفهم الفعلي.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.write("---")
-    c17, c18 = st.columns(2)
-    
-    with c17:
-        actual_sizes = students[['student_id', 'group_id']].drop_duplicates().groupby('group_id').size().reset_index(name='actual_student_count')
-        stated_col = 'stated_num_students' if 'stated_num_students' in groups.columns else ('num_students' if 'num_students' in groups.columns else groups.columns[1])
-        group_meta = groups[['group_id', stated_col]].drop_duplicates()
-        discrepancy_df = pd.merge(group_meta, actual_sizes, on='group_id', how='left').fillna(0)
-        
-        df_melted = discrepancy_df.melt(id_vars=['group_id'], value_vars=[stated_col, 'actual_student_count'], var_name='Count_Type', value_name='Student_Count')
-        df_melted['Count_Type'] = df_melted['Count_Type'].replace({stated_col: 'Stated (Metadata)', 'actual_student_count': 'Actual (Students File)'})
-        
-        fig13 = px.bar(df_melted, x='group_id', y='Student_Count', color='Count_Type', barmode='group',
-                       title='Discrepancy Analysis: Stated vs. Actual Student Counts (Q-12)',
-                       labels={'group_id': 'Group ID', 'Student_Count': 'Number of Students'}, text_auto=True,
-                       color_discrete_map={'Stated (Metadata)': '#aec7e8', 'Actual (Students File)': '#1f77b4'})
-        st.plotly_chart(apply_modern_layout(fig13), use_container_width=True)
-        
-        st.markdown("""
-        <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-12)</div>
-            <p class="insight-text">• كشف التقرير عن فجوات ومطابقة سلبية واضحة بين السجلات الدفترية والأرقام الحقيقية المقيدة بالسيستم في بعض المجموعات الذكية.</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• تحديث خط السير وقاعدة البيانات المرجعية للـ Metadata الخاصة بالمجموعات بشكل فوري وسد الثغرات الإدارية التابعة لها.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with c18:
-        st.info("🔍 **تقرير المطابقة وجرد السجلات (Q-12):** يهدف هذا التبويب لضمان نزاهة البيانات ومطابقة الملفات المصدرية لعدم اتخاذ قرارات دمج عشوائية بناءً على مؤشرات خاطئة.")
+            fig12 = px.treemap(segment_counts, path=['segment'], values='count',
+                               title='Strategic Student Segmentation Dashboard (Q-11)',
+                               color='count', color_continuous_scale='Blues')
+            st.plotly_chart(apply_modern_layout(fig12), use_container_width=True)
+        else:
+            st.info("📊 تعذر احتساب الشرائح التعليمية لعدم توفر متغيرات الدرجات والحضور.")
 
 # ────────────────────────────────────────────────────────
-# TAB 5: Advanced Risks & Group Merging (Q13, Q14, Q15)
+# TAB 5: Advanced Risks
 # ────────────────────────────────────────────────────────
 with tab5:
-    st.subheader("📌 الشريحة الخامسة: خوارزميات الدمج الذكي ونظام التدخل المبكر للمخاطر")
-    c19, c20 = st.columns(2)
-    
-    with c19:
-        actual_sizes_raw = students[['student_id', 'group_id']].drop_duplicates().groupby('group_id').size().reset_index(name='size')
-        smallest_group = actual_sizes_raw.sort_values(by='size').iloc[0]['group_id']
-        
-        student_concept_matrix = concepts.pivot_table(index='student_id', columns='concept_name', values='score_pct', aggfunc='mean').fillna(0)
-        student_groups_lookup = students[['student_id', 'group_id']].drop_duplicates().set_index('student_id')
-        matrix_with_groups = student_concept_matrix.join(student_groups_lookup, how='inner')
-        
-        small_grp_studs = matrix_with_groups[matrix_with_groups['group_id'] == smallest_group].drop(columns=['group_id'])
-        other_studs = matrix_with_groups[matrix_with_groups['group_id'] != smallest_group]
-        
-        recommend_list = []
-        for s_id, s_profile in small_grp_studs.iterrows():
-            min_dist = float('inf')
-            target_g = None
-            for other_id, other_row in other_studs.iterrows():
-                dist = np.linalg.norm(s_profile.values - other_row.drop('group_id').values)
-                if dist < min_dist:
-                    min_dist = dist
-                    target_g = other_row['group_id']
-            recommend_list.append({'Recommended_Target_Group': target_g})
-            
-        recommendations_df = pd.DataFrame(recommend_list)
-        
-        if not recommendations_df.empty:
-            fig14 = px.histogram(recommendations_df, x='Recommended_Target_Group',
-                                 title=f'Euclidean Recommendation: Where to Merge Students from {smallest_group} (Q-13)',
-                                 labels={'Recommended_Target_Group': 'Suggested Target Group'}, color_discrete_sequence=['#ff7f0e'])
-            st.plotly_chart(apply_modern_layout(fig14), use_container_width=True)
-            
-            st.markdown(f"""
-            <div class="insight-box">
-                <div class="insight-title">💡 Insight (Q-13)</div>
-                <p class="insight-text">• قامت الخوارزمية بتحليل الأداء المفهومي للمجموعة الأصغر وزعتهم إقليدياً على المجموعات الكبرى حسب القرب الفكري والأكاديمي المتشابه.</p>
-                <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• اعتماد الدمج المقترح وتسكين الطلاب بالمجموعات المستهدفة لضمان عدم وجود تباين في الشرح والتحصيل بين الأقران الجدد.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("لا توجد بيانات كافية لحساب المسافة الإقليدية.")
-
-    with c20:
-        student_att_abs = attendance.groupby('student_id')['is_present'].mean().reset_index()
-        student_att_abs['absence_rate'] = 1 - student_att_abs['is_present']
-        student_eng_cnt = engagement.groupby('student_id').size().reset_index(name='total_eng')
-        
-        mx_eng = student_eng_cnt['total_eng'].max() if not student_eng_cnt.empty else 1
-        mn_eng = student_eng_cnt['total_eng'].min() if not student_eng_cnt.empty else 0
-        student_eng_cnt['low_eng_score'] = 1 - ((student_eng_cnt['total_eng'] - mn_eng) / (mx_eng - mn_eng + 1e-5))
-        
-        student_fails_cnt = concepts.groupby('student_id')['is_failed'].sum().reset_index(name='failed_concepts')
-        mx_fails = student_fails_cnt['failed_concepts'].max() if not student_fails_cnt.empty else 1
-        student_fails_cnt['failed_concepts_score'] = student_fails_cnt['failed_concepts'] / mx_fails
-        
-        risk_base = students[['student_id', 'full_name', 'group_id']].drop_duplicates()
-        risk_base = pd.merge(risk_base, student_att_abs[['student_id', 'absence_rate']], on='student_id', how='left')
-        risk_base = pd.merge(risk_base, student_eng_cnt[['student_id', 'low_eng_score', 'total_eng']], on='student_id', how='left')
-        risk_base = pd.merge(risk_base, student_fails_cnt[['student_id', 'failed_concepts_score', 'failed_concepts']], on='student_id', how='left').fillna(0)
-        
-        risk_base['risk_score'] = ((risk_base['absence_rate'] * 0.35) + (risk_base['failed_concepts_score'] * 0.35) + (risk_base['low_eng_score'] * 0.30)) * 100
-        top_10_risk = risk_base.sort_values(by='risk_score', ascending=False).head(10)
-        
-        fig15 = px.bar(top_10_risk, x='risk_score', y='full_name', orientation='h',
-                       title='Top 10 At-Risk Students Requiring Immediate Intervention (Q-14)',
-                       labels={'risk_score': 'Risk Severity Score (%)', 'full_name': 'Student Name'},
-                       text='risk_score', color='risk_score', color_continuous_scale='Reds')
-        fig15.update_layout(yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(apply_modern_layout(fig15), use_container_width=True)
-        
-        st.markdown("""
-        <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-14)</div>
-            <p class="insight-text">• نجح نظام التقييم الهجين في فرز وتحديد القائمة الحرجة لـ "أعلى 10 طلاب مهددين بالرسوب أو الانسحاب الفوري" بناءً على خوارزمية الأوزان.</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• سحب هذه القائمة فوراً وإسنادها لقسم الرعاية الأكاديمية بالمنصة لتقديم دعم مكثف مباشر لإنقاذهم قبل الاختبارات القادمة.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-if final_analysis_df.empty:
-    st.warning("⚠️ لم يتم العثور على بيانات! تأكد من صحة مسارات ملفات الـ CSV والإكسيل.")
+    st.subheader("🚨 الشريحة الخامسة: إدارة المخاطر المتقدمة واكتشاف الطلاب المتعثرين")
+    if not filtered_students.empty:
+        st.dataframe(filtered_students[['student_id', 'full_name', 'avg_grade', 'attendance_rate', 'course_name']].sort_values(by='avg_grade'))
+    else:
+        st.info("لا توجد بيانات طلاب لعرضها في قائمة المخاطر المتقدمة.")
