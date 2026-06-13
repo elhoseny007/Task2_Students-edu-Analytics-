@@ -103,43 +103,48 @@ st.write("---")
 # ====================== DATA LOADING & PIPELINE FROM MONGO ======================
 @st.cache_data
 def load_all_pipeline_data_from_mongo():
-    # الاتصال بـ MongoDB أطلس وسحب الـ Collections المنفصلة لبناء التحليلات العميقة
     client = MongoClient('mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/')
     db = client['kayfa_analytics']
     
-    # تحويل الـ Collections إلى DataFrames
-    courses = pd.DataFrame(list(db['courses'].find()))
+    # 1. سحب البيانات من المونجو
     groups = pd.DataFrame(list(db['groups'].find()))
     students = pd.DataFrame(list(db['students'].find()))
     concepts = pd.DataFrame(list(db['concepts_performance'].find()))
     engagement = pd.DataFrame(list(db['engagement_events'].find()))
     submissions = pd.DataFrame(list(db['assignment_submissions'].find()))
+    attendance = pd.DataFrame(list(db['attendance'].find()))
 
-    # سحب ومعالجة الـ Grades
     raw_grades = list(db['grades'].find())
-    # إذا كانت مخزنة كـ مستندات عادية أو تحتاج تفكيك محاذاة لـ Record_path مثل الكود الأول
     if raw_grades and 'grades' in raw_grades[0]:
         grades = pd.json_normalize(raw_grades, record_path=["grades"], meta=["student_id", "course_id", "group_id"])
     else:
         grades = pd.DataFrame(raw_grades)
     
-    # سحب الحضور من السيرفر
-    attendance = pd.DataFrame(list(db['attendance'].find()))
-
-    # تنظيف الـ IDs الخاصة بمونجو لمنع تعارض مصفوفات البيانات
-    for df in [courses, groups, students, concepts, engagement, submissions, grades, attendance]:
+    # 2. تنظيف معرفات مونجو الأساسية لتفادي التداخل في التحليل
+    for df in [groups, students, concepts, engagement, submissions, grades, attendance]:
         if not df.empty and '_id' in df.columns:
             df.drop(columns=['_id'], inplace=True)
 
-    # ──── خط الانابيب والتنظيف البرمجي (نفس منطق كودك الأصلي تماماً) ────
-    merged_df = pd.merge(students, groups, on='group_id', how='left', suffixes=('_student', '_group'))
-    merged_df = pd.merge(merged_df, courses, on='course_id', how='left')
-    final_df = pd.merge(merged_df, grades, on='student_id', how='left', suffixes=('', '_grades'))
+    # 3. توحيد مسميات الأعمدة إلى حروف صغيرة (Lowercase) لضمان الربط السليم مع ملف الدرجات والـ Submissions
+    for df in [groups, students, concepts, engagement, submissions, grades, attendance]:
+        if not df.empty:
+            df.columns = df.columns.str.strip().str.lower()
+
+    # 4. 🛠️ الحل الذكي: بما أن الـ students يحتوي على بيانات الكورس والمجموعة مسبقاً، ادمج الدرجات مباشرة!
+    # نقوم بعمل نسخة من طلاب لتكون أساس التحليل النهائي
+    final_df = students.copy()
     
+    # دمج ملف الدرجات مع جدول الطلاب الأساسي بناءً على student_id
+    if not grades.empty:
+        final_df = pd.merge(final_df, grades, on='student_id', how='left', suffixes=('', '_grades'))
+    
+    # 5. تنظيف ومعالجة القيم المتطرفة (Data Cleaning & Outliers)
     if not final_df.empty and 'score' in final_df.columns:
         final_df.dropna(subset=['score'], inplace=True)
-        final_df['age'] = final_df['age'].abs()
-        final_df = final_df[final_df['age'] <= 50]
+        if 'age' in final_df.columns:
+            final_df['age'] = final_df['age'].abs()
+            final_df = final_df[final_df['age'] <= 50]
+        
         final_df.loc[final_df['score'] < 0, 'score'] = 0
         if 'max_score' in final_df.columns:
             over_score_mask = final_df['score'] > final_df['max_score']
@@ -148,6 +153,7 @@ def load_all_pipeline_data_from_mongo():
     if 'date' in final_df.columns:
         final_df['date'] = pd.to_datetime(final_df['date'])
 
+    # 6. تجهيز ملفات الحضور والتفاعلات والتسليمات
     if not attendance.empty and 'status' in attendance.columns:
         attendance['status_clean'] = attendance['status'].astype(str).str.strip().str.lower()
         attendance['is_present'] = attendance['status_clean'].apply(lambda x: 1 if 'attend' in x or 'present' in x else 0)
@@ -159,10 +165,7 @@ def load_all_pipeline_data_from_mongo():
         engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'])
 
     return final_df, attendance, concepts, engagement, submissions, groups, students
-
-# تشغيل عملية السحب والمعالجة الحية للبيانات من الكلاود
 final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data_from_mongo()
-
 # ====================== SIDEBAR FILTER ======================
 st.sidebar.header("🔍 لوحة التحكم والتصفية")
 available_groups = sorted(final_analysis_df['group_id'].dropna().unique()) if not final_analysis_df.empty else ["G01"]
