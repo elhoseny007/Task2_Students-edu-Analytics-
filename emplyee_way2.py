@@ -90,20 +90,20 @@ st.write("---")
 # ====================== DATA LOADING & PIPELINE ======================
 @st.cache_data
 def load_all_pipeline_data():
-    courses = pd.read_csv(r'c:\Users\ELZAHBIA\AppData\Local\Temp\Rar$DRa11912.27512\student_edu_info\courses.csv')
-    groups = pd.read_csv(r'c:\Users\ELZAHBIA\AppData\Local\Temp\Rar$DRa11912.33722\student_edu_info\groups.csv')
-    students = pd.read_csv(r"c:\Users\ELZAHBIA\AppData\Local\Temp\Rar$DRa11912.35000\student_edu_info\students.csv")
-    concepts = pd.read_csv(r'c:\Users\ELZAHBIA\AppData\Local\Temp\Rar$DRa11912.36305\student_edu_info\concepts_performance.csv')
-    engagement = pd.read_csv(r'c:\Users\ELZAHBIA\AppData\Local\Temp\Rar$DRa11912.37756\student_edu_info\engagement_events.csv')
-    submissions = pd.read_csv(r'c:\Users\ELZAHBIA\AppData\Local\Temp\Rar$DRa11912.28778\student_edu_info\assignment_submissions.csv')
+    courses = pd.read_csv(r'courses.csv')
+    groups = pd.read_csv(r'groups.csv')
+    students = pd.read_csv(r"students.csv")
+    concepts = pd.read_csv(r'concepts_performance.csv')
+    engagement = pd.read_csv(r'engagement_events.csv')
+    submissions = pd.read_csv(r'assignment_submissions.csv')
 
     # Grades JSON
-    with open(r'c:\Users\ELZAHBIA\AppData\Local\Temp\Rar$DRa11912.29390/student_edu_info/grades.json', "r", encoding="utf-8") as f:
+    with open(r'grades.json', "r", encoding="utf-8") as f:
         raw_grades = json.load(f)
     grades = pd.json_normalize(raw_grades, record_path=["grades"], meta=["student_id", "course_id", "group_id"])
     
     # Attendance Excel
-    excel_file = pd.ExcelFile(r'c:\Users\ELZAHBIA\AppData\Local\Temp\Rar$DRa11912.37938/student_edu_info/attendance.xlsx')
+    excel_file = pd.ExcelFile(r'attendance.xlsx')
     sheets_dfs = [pd.read_excel(excel_file, sheet_name=sheet) for sheet in excel_file.sheet_names]
     attendance = pd.concat(sheets_dfs, ignore_index=True)
 
