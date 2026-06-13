@@ -3,6 +3,5 @@ plotly
 numpy
 pandas
 seaborn
-openpyxl
-statsmodels
+matplotlib
 pymongo
