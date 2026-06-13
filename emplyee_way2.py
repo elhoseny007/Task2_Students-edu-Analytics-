@@ -492,29 +492,28 @@ with tab1:
 # ─────────────────────────────────────────────────────────
 with tab2:
     st.subheader("📌 الشريحة الثانية: تتبع وتيرة التسليمات وتفاعل الأجهزة الذكية")
- 
     c5, c6 = st.columns(2)
- 
     with c5:
-        submissions["submission_week"] = submissions["submitted_at"].dt.isocalendar().week
-        sub_trends = ((submissions.groupby(["course_id", "submission_week"]).size().reset_index(name="total_submissions")).sort_values(by=["course_id", "submission_week"]))
+    # 1. حساب الأسبوع وتحويله فوراً لرقم صحيح (Integer) لضمان الترتيب العددي الصحيح
+    submissions["submission_week"] = submissions["submitted_at"].dt.isocalendar().week.astype(int)
+    
+    # 2. عمل الـ groupby والترتيب التصاعدي بناءً على الأرقام
+    sub_trends = (submissions.groupby(["course_id", "submission_week"])
+                  .size()
+                  .reset_index(name="total_submissions")
+                  .sort_values(by=["course_id", "submission_week"])) # هنا الترتيب هيبقى 1, 3, 5, 7, 49, 51
  
-        fig4 = px.line(
-            sub_trends, x="submission_week", y="total_submissions", color="course_id",
-            title="Assignment Submission Trends Across Calendar Weeks (Q-4)",
-            labels={"submission_week": "Calendar Week", "total_submissions": "Submissions Count"},
-            markers=True
-        )
-        fig4.update_layout(xaxis_type="category")
-        st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
- 
-        st.markdown("""
-        <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-4)</div>
-            <p class="insight-text">• قمم (Peaks) محددة متبوعة بانهيار مفاجئ تكشف غياب الاستمرارية في التسليم.</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• توزيع الـ Deadlines بشكل متوازن على مدار الشهر لتخفيف الضغط.</p>
-        </div>""", unsafe_allow_html=True)
+    fig4 = px.line(
+        sub_trends, x="submission_week", y="total_submissions", color="course_id",
+        title="Assignment Submission Trends Across Calendar Weeks (Q-4)",
+        labels={"submission_week": "Calendar Week", "total_submissions": "Submissions Count"},
+        markers=True
+    )
+    
+    # 3. جرب تشيل السطر ده أو سيبه، بس بعد الـ astype(int) المحور المفروض يترتب طردي تلقائي
+    fig4.update_layout(xaxis_type="category") 
+    
+    st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
  
     with c6:
         engagement["engagement_week"] = engagement["event_datetime"].dt.isocalendar().week
