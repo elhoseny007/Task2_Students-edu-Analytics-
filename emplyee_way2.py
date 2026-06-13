@@ -1,4 +1,4 @@
-#libraries
+# ====================== LIBRARIES ======================
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -7,10 +7,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
 import streamlit as st
-import seaborn
 import json
 import os
 import warnings
+from pymongo import MongoClient
 
 # 1. إعداد الصفحة (يجب أن يكون أول أمر لـ Streamlit)
 st.set_page_config(
@@ -88,6 +88,13 @@ with col_title:
 st.write("---")
 
 # ====================== DATA LOADING & PIPELINE ======================
+@st.cache_resource(show_spinner="🔗 جاري الاتصال بـ MongoDB ...")
+def get_mongo_collection():
+    # إنشاء الاتصال بالـ URI الخاص بك
+    client = MongoClient("mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/")
+    db = client["grades"]
+    collection = db["grades"]
+    return collection, client
 @st.cache_data
 def load_all_pipeline_data():
     courses = pd.read_csv(r'courses.csv')
@@ -96,12 +103,18 @@ def load_all_pipeline_data():
     concepts = pd.read_csv(r'concepts_performance.csv')
     engagement = pd.read_csv(r'engagement_events.csv')
     submissions = pd.read_csv(r'assignment_submissions.csv')
+    collection, client = get_mongo_collection()
 
-    # Grades JSON
-    with open(r'grades.json', "r", encoding="utf-8") as f:
-        raw_grades = json.load(f)
-    grades = pd.json_normalize(raw_grades, record_path=["grades"], meta=["student_id", "course_id", "group_id"])
-    
+    raw_grades = list(collection.find({}, {"_id": 0}))
+
+    if raw_grades and "grades" in raw_grades[0]:
+        grades = pd.json_normalize(raw_grades[0], record_path=["grades"], meta=["student_id", "course_id", "group_id"])
+    else:
+        try:
+            grades = pd.json_normalize(raw_grades, record_path=["grades"], meta=["student_id", "course_id", "group_id"])
+        except Exception:
+            grades = pd.DataFrame(raw_grades)
+
     # Attendance Excel
     excel_file = pd.ExcelFile(r'attendance.xlsx')
     sheets_dfs = [pd.read_excel(excel_file, sheet_name=sheet) for sheet in excel_file.sheet_names]
