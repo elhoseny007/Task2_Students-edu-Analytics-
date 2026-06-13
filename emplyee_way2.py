@@ -13,42 +13,13 @@ import os
 import warnings
 from pymongo import MongoClient
 
-# ====================== DATA LOADING & PIPELINE FROM MONGO ======================
-@st.cache_data # لمنع إعادة تحميل الداتا مع كل حركة في الداشبورد
-def load_all_pipeline_data_from_mongo():
-    # 1. سحب رابط الاتصال بأمان من إعدادات Streamlit Secrets
-    # 2. الاتصال بـ MongoDB
-    client = MongoClient('mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/')
-    
-    # 3. اسم قاعدة البيانات الحقيقي من الأطلس
-    db = client['kayfa_analytics']
-    
-    # 4. سحب الـ Collections وتحويلها فوراً لـ DataFrames
-    # (تأكد من رفع باقي الـ collections بنفس الأسماء المذكورة هنا)
-    students          = pd.DataFrame(list(db['students_summary'].find()))
-    attendance        = pd.DataFrame(list(db['attendance'].find()))
-    concepts          = pd.DataFrame(list(db['concepts'].find()))
-    engagement        = pd.DataFrame(list(db['engagement'].find()))
-    submissions       = pd.DataFrame(list(db['submissions'].find()))
-    groups            = pd.DataFrame(list(db['groups'].find()))
-    final_analysis_df = pd.DataFrame(list(db['final_analysis'].find()))
-    
-    # 5. تنظيف عمود الـ _id الخاص بمونجو من الـ DataFrames لمنع التضارب
-    for df in [final_analysis_df, attendance, concepts, engagement, submissions, groups, students]:
-        if df is not None and not df.empty and '_id' in df.columns:
-            df.drop(columns=['_id'], inplace=True)
-            
-    return final_analysis_df, attendance, concepts, engagement, submissions, groups, students
-
-# تشغيل الـ Pipeline وسحب الداتا كـ DataFrames جاهزة لباقي الكود
-final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data_from_mongo()
-
-# ====================== PAGE CONFIGURATION ======================
+# 1. إعداد الصفحة (يجب أن يكون أول أمر لـ Streamlit)
 st.set_page_config(
     page_title="Kayfa Platform - Full Executive Analytics",
     layout="wide",
     page_icon="📊"
 )
+
 # ====================== CSS STYLING ======================
 st.markdown("""
 <style>
@@ -116,24 +87,42 @@ with col_title:
     st.markdown("<p style='color:#bae6fd; margin:0;'>Task 2 kayfa Analytics - Internship Program</p>", unsafe_allow_html=True)
 
 st.write("---")
+@st.cache_data
+def load_all_pipeline_data_from_mongo():
 
+    client = MongoClient(st.secrets["MONGO_URI"])
+
+    db = client["kayfa_analytics"]
+
+    students = pd.DataFrame(list(db["students_summary"].find()))
+    attendance = pd.DataFrame(list(db["attendance"].find()))
+    concepts = pd.DataFrame(list(db["concepts"].find()))
+    engagement = pd.DataFrame(list(db["engagement"].find()))
+    submissions = pd.DataFrame(list(db["submissions"].find()))
+    groups = pd.DataFrame(list(db["groups"].find()))
+
+    for df in [students, attendance, concepts, engagement, submissions, groups]:
+        if not df.empty and "_id" in df.columns:
+            df.drop(columns=["_id"], inplace=True)
+
+    return students, attendance, concepts, engagement, submissions, groups
 # ====================== DATA LOADING & PIPELINE ======================
 @st.cache_data
 def load_all_pipeline_data():
-    courses = pd.read_csv(r'courses.csv')
-    groups = pd.read_csv(r'groups.csv')
-    students = pd.read_csv(r"students.csv")
-    concepts = pd.read_csv(r'concepts_performance.csv')
-    engagement = pd.read_csv(r'engagement_events.csv')
-    submissions = pd.read_csv(r'assignment_submissions.csv')
+    courses = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\courses.csv')
+    groups = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\groups.csv')
+    students = pd.read_csv(r"d:\Desktop\Data Analysis\Internship\students.csv")
+    concepts = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\concepts_performance.csv')
+    engagement = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\engagement_events.csv')
+    submissions = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\assignment_submissions.csv')
 
     # Grades JSON
-    with open(r'grades.json', "r", encoding="utf-8") as f:
+    with open(r'd:\Desktop\Data Analysis\Internship\grades.json', "r", encoding="utf-8") as f:
         raw_grades = json.load(f)
     grades = pd.json_normalize(raw_grades, record_path=["grades"], meta=["student_id", "course_id", "group_id"])
     
     # Attendance Excel
-    excel_file = pd.ExcelFile(r'attendance.xlsx')
+    excel_file = pd.ExcelFile(r'd:\Desktop\Data Analysis\Internship\attendance.xlsx')
     sheets_dfs = [pd.read_excel(excel_file, sheet_name=sheet) for sheet in excel_file.sheet_names]
     attendance = pd.concat(sheets_dfs, ignore_index=True)
 
@@ -141,7 +130,9 @@ def load_all_pipeline_data():
     merged_df = pd.merge(students, groups, on='group_id', how='left', suffixes=('_student', '_group'))
     merged_df = pd.merge(merged_df, courses, on='course_id', how='left')
     final_df = pd.merge(merged_df, grades, on='student_id', how='left', suffixes=('', '_grades'))
-    
+    ance, concepts, engagement, submissions, groups, students
+
+# تشغيل الـ Pipeline وسحب الداتا كـ DataFrames جاهزة لباقي الكود
     final_df.dropna(subset=['score'], inplace=True)
     final_df['age'] = final_df['age'].abs()
     final_df = final_df[final_df['age'] <= 50]
@@ -157,6 +148,9 @@ def load_all_pipeline_data():
         engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'])
 
     return final_df, attendance, concepts, engagement, submissions, groups, students
+
+final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data()
+
 # ====================== SIDEBAR FILTER ======================
 st.sidebar.header("🔍 لوحة التحكم والتصفية")
 available_groups = sorted(final_analysis_df['group_id'].unique())
@@ -718,3 +712,5 @@ with tab5:
 
 if final_analysis_df.empty:
     st.warning("⚠️ لم يتم العثور على بيانات! تأكد من صحة مسارات ملفات الـ CSV والإكسيل.")
+#app week2
+#https://bfjdjtad47rhd95xmcjrwe.streamlit.app/
