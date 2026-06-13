@@ -1,4 +1,5 @@
 # ====================== LIBRARIES ======================
+# ====================== LIBRARIES ======================
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -216,89 +217,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Q10-Q12: Age Bands & Stratified Segments",
     "🚨 Q13-Q15: Advanced Risks & Group Merging"
 ])
-
-# باقي الكود (الـ Tabs) يبقى كما هو تقريباً مع تعديلات بسيطة للتوافق
-# (مثل استخدام filtered_final و attendance و students)
-
-# ... (الكود الخاص بالـ Tabs كما هو مع المتغيرات الموحدة)
- 
- # ══════════════════════════════════════════════
-# تجهيز وتأمين الجداول لتتوافق مع الـ Tabs (تجهيز الفلاتر والمسميات)
-# ══════════════════════════════════════════════
-
-# 1. تهيئة جدول الطلاب الأساسي من كوليكشن الـ users
-students = users.copy() if not users.empty else pd.DataFrame(columns=["student_id", "full_name", "age", "group_id"])
-
-# تأمين وجود الأعمدة الأساسية حتى لو الكوليكشن ناقصة
-for col in ["student_id", "full_name", "age", "group_id"]:
-    if col not in students.columns:
-        students[col] = "N/A"
-
-# تنظيف وتأمين الأعمار
-students["age"] = pd.to_numeric(students["age"], errors="coerce").fillna(22).abs()
-students = students[students["age"] <= 50]
-
-# 2. بناء الجدول المتكامل للأداء (filtered_final) عبر دمج الطلاب مع التسليمات والكورسات
-if not submissions.empty:
-    filtered_final = pd.merge(submissions, students, on="student_id", how="inner")
-    if not courses.empty:
-        filtered_final = pd.merge(filtered_final, courses, on="course_id", how="left")
-else:
-    filtered_final = pd.DataFrame(columns=["student_id", "course_id", "course_name", "score", "max_score", "type", "age", "group_id"])
-
-# تأمين وجود الأعمدة داخل filtered_final
-if "course_name" not in filtered_final.columns and "course_id" in filtered_final.columns:
-    filtered_final["course_name"] = filtered_final["course_id"]
-if "type" not in filtered_final.columns:
-    filtered_final["type"] = "Assignment"
-if "score" in filtered_final.columns:
-    filtered_final["score"] = pd.to_numeric(filtered_final["score"], errors="coerce").fillna(0)
-    filtered_final["max_score"] = pd.to_numeric(filtered_final.get("max_score", 100), errors="coerce").fillna(100)
-
-# اعتماد اسم المرجعية للتحليلات المتقدمة
-final_analysis_df = filtered_final.copy()
-
-# 3. توحيد مسمى التفاعل والحضور (attendance & engagement)
-# كوليكشن الـ interactions هي اللي بتلعب الدورين بناءً على الفلترة
-engagement = interactions.copy() if not interactions.empty else pd.DataFrame(columns=["student_id", "event_datetime", "device", "status"])
-if "event_datetime" not in engagement.columns and "timestamp" in engagement.columns:
-    engagement["event_datetime"] = engagement["timestamp"]
-
-# بناء الـ attendance (الحضور) من السجلات المتاحة التي تحتوي على حالة الحضور
-if not interactions.empty and "status" in interactions.columns:
-    attendance = interactions.dropna(subset=["status"]).copy()
-    attendance['status_clean'] = attendance['status'].astype(str).str.strip().str.lower()
-    attendance['is_present'] = attendance['status_clean'].apply(lambda x: 1 if ('attend' in x or 'present' in x) else 0)
-else:
-    # لو مفيش كوليكشن حضور صريحة، بنبني هيكل احتياطي فارغ لمنع توقف الكود
-    attendance = pd.DataFrame(columns=["student_id", "group_id", "is_present", "status"])
-
-if "group_id" not in attendance.columns and not students.empty:
-    attendance = attendance.drop(columns=["group_id"], errors="ignore").merge(students[["student_id", "group_id"]].drop_duplicates(), on="student_id", how="left")
-
-# 4. بناء كوليكشن المفاهيم (concepts) احتياطياً لو مش مرفوعة لضمان عدم توقف الخوارزميات
-if 'concepts' not in locals() or concepts.empty:
-    # بناء مفاهيم مبنية حياً على درجات التسليمات الفعلية للطالب
-    concept_rows = []
-    concept_names = ["Variables", "Control Flow", "Functions", "OOP", "Databases"]
-    for _, row in students.iterrows():
-        st_sub = submissions[submissions["student_id"] == row["student_id"]]
-        base_score = st_sub["score"].mean() if not st_sub.empty else 70
-        for idx, cname in enumerate(concept_names):
-            sc = float(np.clip(base_score + np.random.normal(0, 10), 0, 100))
-            concept_rows.append({
-                "student_id": row["student_id"],
-                "concept_name": cname,
-                "score_pct": sc,
-                "is_failed": sc < 50
-            })
-    concepts = pd.DataFrame(concept_rows)
-
-# 🚨 تأمين أخير لجدول الـ groups
-if 'groups' not in locals() or groups.empty:
-    groups = pd.DataFrame(students["group_id"].dropna().unique(), columns=["group_id"])
-    groups["stated_num_students"] = groups["group_id"].map(students.groupby("group_id").size())
-
 
 # ─────────────────────────────────────────────────────────
 # TAB 1 – Demographics & Core Performance  (Q1, Q2, Q3)
