@@ -158,8 +158,6 @@ with tab1:
             fig2 = px.histogram(filtered_final, x='score', title='Score Distribution (Q2)')
             st.plotly_chart(apply_modern_layout(fig2), use_container_width=True)
 
-st.success("✅ التطبيق يعمل الآن بنجاح مع MongoDB")
-
 # لو عايز باقي الـ Tabs كاملة زي الأول، قولي "أكمل كل الـ 15 chart"
 
     c3, c4 = st.columns(2)
