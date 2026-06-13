@@ -507,29 +507,31 @@ with tab2:
     c5, c6 = st.columns(2)
  
     with c5:
-        # 1. التأكد التام من تحويل التواريخ لـ Datetime وإهمال الأخطاء وتحويلها لـ NaT
+    # 1. التأكد التام من تحويل التواريخ لـ Datetime وإهمال الأخطاء وتحويلها لـ NaT
         submissions["submitted_at"] = pd.to_datetime(submissions["submitted_at"], errors='coerce')
-        
-        # 2. حذف أي تسليمات مفيهاش تاريخ (علشان الـ NaT بيعمل قيم عشوائية في الأسابيع)
+    
+    # 2. حذف أي تسليمات مفيهاش تاريخ (علشان الـ NaT بيعمل قيم عشوائية في الأسابيع)
         submissions = submissions.dropna(subset=["submitted_at"])
-        
-        # 3. حساب رقم الأسبوع وتحويله فوراً لرقم صحيح صريح (Integer) لضمان الترتيب الرياضي
-        submissions["submission_week"] = submissions["submitted_at"].dt.isocalendar().week.astype(int)
-        
-        # 4. عمل الـ groupby والـ size ثم الترتيب التصاعدي الفعلي بناءً على رقم الأسبوع
+    
+    # [تعديل الأمان والترتيب الزمني الحقيقي بدون تغيير في اللوجيك]
+    # بنجيب السنة والأسبوع مع بعض عشان لو الداتا ممتدة بين سنتين تترتب صح (مثلاً: 2025-W49 ثم 2026-W01)
+        iso_cal = submissions["submitted_at"].dt.isocalendar()
+        submissions["submission_week"] = iso_cal.year.astype(str) + "-W" + iso_cal.week.map("{:02d}".format)
+    
+    # 4. عمل الـ groupby والـ size ثم الترتيب التصاعدي الفعلي بناءً على السلسلة الزمنية للأسبوع
         sub_trends = (submissions.groupby(["course_id", "submission_week"])
                       .size()
                       .reset_index(name="total_submissions")
-                      .sort_values(by=["submission_week", "course_id"])) # رتبنا بالأسابيع الأول
+                      .sort_values(by=["submission_week", "course_id"])) # الترتيب هنا هيبقى زمنياً مظبوط بنسبة 100%
  
         fig4 = px.line(
             sub_trends, x="submission_week", y="total_submissions", color="course_id",
             title="Assignment Submission Trends Across Calendar Weeks (Q-4)",
-            labels={"submission_week": "Calendar Week", "total_submissions": "Submissions Count"},
+            labels={"submission_week": "Calendar Week (Year-W)", "total_submissions": "Submissions Count"},
             markers=True
         )
-        
-        # 5. تحويل المحور لـ Category عشان يظهر الأسابيع المتاحة فقط ورا بعضها بشكل زجزاج نضيف
+    
+    # 5. تحويل المحور لـ Category عشان يظهر الأسابيع المتاحة فقط ورا بعضها بشكل نضيف جداً
         fig4.update_layout(xaxis_type="category")
         st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
  
