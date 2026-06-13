@@ -146,67 +146,98 @@ st.write("---")
 
 @st.cache_resource(show_spinner="🔗 جاري الاتصال بـ MongoDB …")
 def get_mongo_client():
-    return MongoClient('mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/')
+    """اتصال واحد بيتعاد استخدامه طول جلسة التطبيق."""
+    uri = st.secrets["mongo"]["uri"]
+    return MongoClient(uri)
 
 @st.cache_data(show_spinner="⏳ جاري تحميل البيانات …")
 def load_all_data():
     client = get_mongo_client()
-    db     = client["kayfa_analytics"]   # ← اسم قاعدة البيانات
+    db     = client["kayfa_analytics"]
 
     def collection_to_df(name: str) -> pd.DataFrame:
+        """سحب أي collection وحذف عمود _id تلقائياً."""
         df = pd.DataFrame(list(db[name].find()))
         if "_id" in df.columns:
             df.drop(columns=["_id"], inplace=True)
         return df
 
-    # ── سحب الـ Collections ──
-    students    = collection_to_df("students_summary")
-    groups      = collection_to_df("groups")
-    courses     = collection_to_df("courses")
+    # ── students_summary هي المصدر الرئيسي – فيها كل بيانات الطالب والمجموعة والكورس ──
+    students = collection_to_df("students_summary")
+
+    # ── باقي الـ collections المنفصلة ──
     concepts    = collection_to_df("concepts")
     engagement  = collection_to_df("engagement")
     submissions = collection_to_df("submissions")
     attendance  = collection_to_df("attendance")
 
-    # grades مخزّنة كـ nested documents → نفرد الـ grades array
-    raw_grades  = list(db["grades"].find())
-    for doc in raw_grades:
-        doc.pop("_id", None)
-    grades = pd.json_normalize(
-        raw_grades,
-        record_path=["grades"],
-        meta=["student_id", "course_id", "group_id"],
-        errors="ignore"
-    )
+    # ── final_df = students_summary مباشرةً (مش محتاجين merge) ──
+    final_df = students.copy()
 
-    # ── Merge & clean final_df ──
-    merged   = students.merge(groups,  on="group_id",  how="left", suffixes=("_student", "_group"))
-    merged   = merged.merge(courses,   on="course_id", how="left")
-    final_df = merged.merge(grades,    on="student_id", how="left", suffixes=("", "_grades"))
-
-    # تنظيف الدرجات والأعمار
-    final_df.dropna(subset=["score"], inplace=True)
+    # تنظيف العمر
     final_df["age"] = final_df["age"].abs()
     final_df        = final_df[final_df["age"] <= 50]
+
+    # تنظيف الدرجات — avg_grade هو العمود الموجود في students_summary
+    # نعمله rename عشان باقي الكود يشتغل على "score"
+    if "avg_grade" in final_df.columns and "score" not in final_df.columns:
+        final_df.rename(columns={"avg_grade": "score"}, inplace=True)
+
+    final_df.dropna(subset=["score"], inplace=True)
     final_df.loc[final_df["score"] < 0, "score"] = 0
+    final_df.loc[final_df["score"] > 100, "score"] = 100
 
-    over_mask = final_df["score"] > final_df["max_score"]
-    final_df.loc[over_mask, "score"] = final_df.loc[over_mask, "max_score"]
-    final_df["date"] = pd.to_datetime(final_df["date"])
+    # max_score مش موجود → نضيفه ثابت 100
+    if "max_score" not in final_df.columns:
+        final_df["max_score"] = 100
 
-    # تنظيف الحضور
-    attendance["status_clean"] = attendance["status"].astype(str).str.strip().str.lower()
-    attendance["is_present"]   = attendance["status_clean"].apply(
-        lambda x: 1 if ("attend" in x or "present" in x) else 0
-    )
+    # date → enrollment_date
+    if "enrollment_date" in final_df.columns and "date" not in final_df.columns:
+        final_df.rename(columns={"enrollment_date": "date"}, inplace=True)
+    if "date" in final_df.columns:
+        final_df["date"] = pd.to_datetime(final_df["date"])
 
-    # تنظيف تواريخ التسليم والتفاعل
-    submissions["submitted_at"] = pd.to_datetime(submissions["submitted_at"])
-    if "event_datetime" in engagement.columns:
+    # type (نوع التقييم) — لو مش موجود نضيف قيمة افتراضية
+    if "type" not in final_df.columns:
+        final_df["type"] = "General"
+
+    # ── groups = نفيد منه في Q-12 (stated vs actual) ──
+    # بنبنيه من students_summary نفسها
+    groups = (final_df[["group_id", "stated_num_students"]]
+              .drop_duplicates(subset=["group_id"])
+              .reset_index(drop=True))
+
+    # ── تنظيف الحضور ──
+    if not attendance.empty and "status" in attendance.columns:
+        attendance["status_clean"] = attendance["status"].astype(str).str.strip().str.lower()
+        attendance["is_present"]   = attendance["status_clean"].apply(
+            lambda x: 1 if ("attend" in x or "present" in x) else 0
+        )
+    elif not attendance.empty and "attendance_rate" in attendance.columns:
+        # لو الحضور مخزّن كنسبة مئوية مباشرةً
+        attendance["is_present"] = (attendance["attendance_rate"] / 100).clip(0, 1)
+
+    # لو attendance فاضية → نبنيها من students_summary
+    if attendance.empty or "is_present" not in attendance.columns:
+        att_rows = []
+        for _, row in final_df.iterrows():
+            att_rows.append({
+                "student_id":    row["student_id"],
+                "group_id":      row.get("group_id", ""),
+                "is_present":    row.get("attendance_rate", 0) / 100,
+                "attendance_rate": row.get("attendance_rate", 0)
+            })
+        attendance = pd.DataFrame(att_rows)
+
+    # ── تنظيف تواريخ التسليم والتفاعل ──
+    if not submissions.empty and "submitted_at" in submissions.columns:
+        submissions["submitted_at"] = pd.to_datetime(submissions["submitted_at"])
+    if not engagement.empty and "event_datetime" in engagement.columns:
         engagement["event_datetime"] = pd.to_datetime(engagement["event_datetime"])
 
-    # عمود is_failed في concepts
-    concepts["is_failed"] = concepts["score_pct"] < 50
+    # ── concepts: عمود is_failed ──
+    if not concepts.empty and "score_pct" in concepts.columns:
+        concepts["is_failed"] = concepts["score_pct"] < 50
 
     return final_df, attendance, concepts, engagement, submissions, groups, students
 
