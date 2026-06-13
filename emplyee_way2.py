@@ -39,7 +39,7 @@ def apply_modern_layout(fig):
     )
     return fig
 
-# ====================== LOAD FROM MONGO (محسّن) ======================
+# ====================== LOAD FROM MONGO ======================
 @st.cache_data(ttl=300)
 def load_from_mongo():
     client = MongoClient('mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/')
@@ -57,7 +57,6 @@ def load_from_mongo():
         if not df.empty and '_id' in df.columns:
             df.drop(columns=['_id'], inplace=True)
 
-    # === أهم جزء: ضمان وجود group_id ===
     if students.empty:
         st.error("لا توجد بيانات في مجموعة students")
         st.stop()
@@ -103,16 +102,33 @@ def load_from_mongo():
         if 'status' in attendance.columns:
             attendance['is_present'] = attendance['status'].astype(str).str.lower().str.contains('attend|present|yes|1').astype(int)
 
+    # Submissions cleaning (تأمين صيغة التاريخ للأسابيع)
+    if not submissions.empty:
+        submissions.columns = submissions.columns.str.strip().str.lower()
+        if 'submitted_at' in submissions.columns:
+            submissions['submitted_at'] = pd.to_datetime(submissions['submitted_at'], errors='coerce')
+            submissions['week'] = submissions['submitted_at'].dt.isocalendar().week
+
+    # Engagement cleaning
+    if not engagement.empty:
+        engagement.columns = engagement.columns.str.strip().str.lower()
+        if 'event_datetime' in engagement.columns:
+            engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'], errors='coerce')
+            engagement['week'] = engagement['event_datetime'].dt.isocalendar().week
+
     return final_df, attendance, concepts, engagement, submissions, groups, students
 
 final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_from_mongo()
+
+# ====================== HEADER layout ======================
+st.markdown('<h1 class="gradient-title">📊 Kayfa Executive Analytics</h1>', unsafe_allow_html=True)
 
 # ====================== SIDEBAR ======================
 st.sidebar.header("🔍 لوحة التحكم")
 available_groups = sorted(final_analysis_df['group_id'].dropna().unique()) if not final_analysis_df.empty else ["G01"]
 selected_group = st.sidebar.selectbox("اختر المجموعة المستهدفة (Group ID):", available_groups)
 
-# ====================== FILTERING (الجزء المُصلح) ======================
+# ====================== FILTERING ======================
 filtered_final = final_analysis_df[final_analysis_df['group_id'] == selected_group].copy()
 
 # ====================== KPIs ======================
@@ -126,7 +142,9 @@ with c3:
     att_rate = 0
     if not attendance.empty:
         group_studs = filtered_final['student_id'].unique()
-        att_rate = attendance[attendance['student_id'].isin(group_studs)]['is_present'].mean() * 100
+        filtered_att = attendance[attendance['student_id'].isin(group_studs)]
+        if not filtered_att.empty:
+            att_rate = filtered_att['is_present'].mean() * 100
     st.metric("📅 معدل الحضور", f"{att_rate:.1f}%")
 with c4:
     at_risk = (filtered_final.groupby('student_id')['score'].mean() < 60).sum() if not filtered_final.empty else 0
@@ -134,7 +152,7 @@ with c4:
 
 st.divider()
 
-# ====================== TABS (مبسطة وآمنة) ======================
+# ====================== TABS ======================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📈 Q1-Q3: Demographics & Performance",
     "🕒 Q4-Q6: Submissions & Devices",
@@ -147,35 +165,34 @@ with tab1:
     st.subheader("تحليل الحضور والدرجات")
     col1, col2 = st.columns(2)
     with col1:
-        if not attendance.empty:
+        if not attendance.empty and 'group_id' in attendance.columns:
             g_att = attendance.groupby('group_id')['is_present'].mean().reset_index()
-            g_att['rate'] = g_att['is_present']*100
-            fig1 = px.bar(g_att, x='group_id', y='rate', title='Attendance Rate per Group (Q1)')
+            g_att['rate'] = g_att['is_present'] * 100
+            fig1 = px.bar(g_att, x='group_id', y='rate', title='Attendance Rate per Group (Q1)', color='rate', color_continuous_scale='Blues')
             st.plotly_chart(apply_modern_layout(fig1), use_container_width=True)
 
     with col2:
         if 'score' in filtered_final.columns and not filtered_final.empty:
-            fig2 = px.histogram(filtered_final, x='score', title='Score Distribution (Q2)')
+            fig2 = px.histogram(filtered_final, x='score', title='Score Distribution (Q2)', color_discrete_sequence=['#818cf8'])
             st.plotly_chart(apply_modern_layout(fig2), use_container_width=True)
-
-# لو عايز باقي الـ Tabs كاملة زي الأول، قولي "أكمل كل الـ 15 chart"
 
     c3, c4 = st.columns(2)
     with c3:
-        if 'course_name' in filtered_final.columns:
-            fig3 = px.box(filtered_final, x='course_name', y='score', title='Scores by Course (Q2 Pt2)')
+        if 'course_name' in filtered_final.columns and not filtered_final.empty:
+            fig3 = px.box(filtered_final, x='course_name', y='score', title='Scores by Course (Q2 Pt2)', color='course_name')
             st.plotly_chart(apply_modern_layout(fig3), use_container_width=True)
 
     with c4:
-        if not attendance.empty:
+        if not attendance.empty and not filtered_final.empty:
             student_grades = filtered_final.groupby('student_id')['score'].mean().reset_index(name='avg_score')
             student_att = attendance.groupby('student_id')['is_present'].mean().reset_index(name='att_rate')
             student_att['att_rate'] *= 100
             corr_df = pd.merge(student_grades, student_att, on='student_id')
             if len(corr_df) > 1:
                 corr = corr_df['avg_score'].corr(corr_df['att_rate'])
-                st.metric("ارتباط الحضور بالدرجات", f"{corr:.2f}")
-                fig_corr = px.scatter(corr_df, x='att_rate', y='avg_score', trendline='ols', title='Attendance vs Grade (Q3)')
+                st.metric("ارتباط الحضور بالدرجات (Pearson r)", f"{corr:.2f}")
+                # تم تنظيف واستخدام الـ Scatter بدون trendline إلزامي لتفادي انهيار السكربت إذا لم تتوفر حزمة statsmodels
+                fig_corr = px.scatter(corr_df, x='att_rate', y='avg_score', title='Attendance vs Grade (Q3)', color='avg_score')
                 st.plotly_chart(apply_modern_layout(fig_corr), use_container_width=True)
 
 # ==================== TAB 2 ====================
@@ -183,27 +200,28 @@ with tab2:
     st.subheader("التسليمات والتفاعل")
     c5, c6 = st.columns(2)
     with c5:
-        if not submissions.empty and 'submitted_at' in submissions.columns:
-            submissions['week'] = pd.to_datetime(submissions['submitted_at']).dt.isocalendar().week
-            fig4 = px.line(submissions.groupby('week').size().reset_index(name='count'), 
-                          x='week', y='count', title='Submission Trends (Q4)', markers=True)
+        if not submissions.empty and 'week' in submissions.columns:
+            sub_counts = submissions.groupby('week').size().reset_index(name='count')
+            fig4 = px.line(sub_counts, x='week', y='count', title='Submission Trends Across Weeks (Q4)', markers=True)
             st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
 
     with c6:
-        if not engagement.empty and 'event_datetime' in engagement.columns:
-            engagement['week'] = pd.to_datetime(engagement['event_datetime']).dt.isocalendar().week
-            fig5 = px.line(engagement.groupby('week').size().reset_index(name='events'), 
-                          x='week', y='events', title='Engagement Over Weeks (Q5)', markers=True)
+        if not engagement.empty and 'week' in engagement.columns:
+            eng_counts = engagement.groupby('week').size().reset_index(name='events')
+            fig5 = px.line(eng_counts, x='week', y='events', title='Engagement Over Weeks (Q5)', markers=True)
+            fig5.update_traces(line_color='#34d399')
             st.plotly_chart(apply_modern_layout(fig5), use_container_width=True)
 
     c7, c8 = st.columns(2)
     with c7:
-        if not engagement.empty and 'device' in engagement.columns:
+        if not engagement.empty and 'device' in engagement.columns and not filtered_final.empty:
             dev = engagement.groupby('student_id')['device'].agg(lambda x: x.mode()[0] if len(x)>0 else None).reset_index()
             dev_perf = pd.merge(filtered_final, dev, on='student_id', how='inner')
             if not dev_perf.empty and 'device' in dev_perf.columns:
-                fig6 = px.box(dev_perf, x='device', y='score', title='Performance by Device (Q6)')
+                fig6 = px.box(dev_perf, x='device', y='score', title='Performance by Device (Q6)', color='device')
                 st.plotly_chart(apply_modern_layout(fig6), use_container_width=True)
+    with c8:
+        st.markdown("<div class='insight-box'><strong>💡 ملخص تفاعلات المنصة:</strong> تظهر الرسوم البيانية وتيرة التفاعل الأسبوعي ومقارنة أداء الطلاب بناءً على الأجهزة المستخدمة في عملية التعلم.</div>", unsafe_allow_html=True)
 
 # ==================== TAB 3 ====================
 with tab3:
@@ -211,59 +229,76 @@ with tab3:
     c11, c12 = st.columns(2)
     with c11:
         if not submissions.empty and all(col in submissions.columns for col in ['time_spent_minutes', 'attempts']):
-            fig7 = px.scatter(submissions, x='time_spent_minutes', y='attempts', title='Time vs Attempts (Q7)', trendline='ols')
+            fig7 = px.scatter(submissions, x='time_spent_minutes', y='attempts', title='Time Spent vs Attempts (Q7)', color='attempts')
             st.plotly_chart(apply_modern_layout(fig7), use_container_width=True)
 
     with c12:
         if not concepts.empty and 'score_pct' in concepts.columns:
+            concepts.columns = concepts.columns.str.strip().str.lower()
             concept_perf = concepts.groupby('concept_name')['score_pct'].mean().reset_index().sort_values('score_pct')
-            fig9 = px.bar(concept_perf, x='score_pct', y='concept_name', orientation='h', title='Performance by Concept (Q8)')
+            fig9 = px.bar(concept_perf, x='score_pct', y='concept_name', orientation='h', title='Performance by Concept (Q8)', color='score_pct', color_continuous_scale='Reds')
             st.plotly_chart(apply_modern_layout(fig9), use_container_width=True)
 
 # ==================== TAB 4 ====================
 with tab4:
     st.subheader("الفئات العمرية والشرائح")
-    if 'age' in students.columns:
-        age_df = students[['student_id', 'age']].merge(
-            filtered_final.groupby('student_id')['score'].mean().reset_index(), on='student_id', how='left')
-        age_df['age_band'] = pd.cut(age_df['age'], bins=[0,22,26,100], labels=['Under 22','22-26','Above 26'])
-        age_stats = age_df.groupby('age_band', observed=False)['score'].mean().reset_index()
+    c13, c14 = st.columns(2)
+    with c13:
+        if 'age' in students.columns and not filtered_final.empty:
+            age_df = students[['student_id', 'age']].merge(
+                filtered_final.groupby('student_id')['score'].mean().reset_index(), on='student_id', how='left')
+            age_df.dropna(subset=['age', 'score'], inplace=True)
+            if not age_df.empty:
+                age_df['age_band'] = pd.cut(age_df['age'], bins=[0,22,26,100], labels=['Under 22','22-26','Above 26'])
+                age_stats = age_df.groupby('age_band', observed=False)['score'].mean().reset_index()
 
-        fig11 = px.bar(age_stats, x='age_band', y='score', title='Performance by Age Band (Q10)')
-        st.plotly_chart(apply_modern_layout(fig11), use_container_width=True)
+                fig11 = px.bar(age_stats, x='age_band', y='score', title='Performance by Age Band (Q10)', text_auto='.1f', color='age_band')
+                st.plotly_chart(apply_modern_layout(fig11), use_container_width=True)
 
-    # Student Segmentation
-    if not concepts.empty:
-        concepts['failed'] = concepts['score_pct'] < 50
-        fails = concepts.groupby('student_id')['failed'].sum().reset_index(name='failed_count')
-        seg = students[['student_id','group_id']].merge(fails, on='student_id', how='left').fillna(0)
-        seg = seg.merge(filtered_final.groupby('student_id')['score'].mean().reset_index(), on='student_id', how='left')
-        
-        def segment(row):
-            if row['score'] >= 75 and row['failed_count'] == 0: return 'High-Achievers'
-            elif row['score'] < 60: return 'At-Risk'
-            return 'Average'
-        seg['segment'] = seg.apply(segment, axis=1)
-        
-        fig12 = px.pie(seg, names='segment', title='Student Segments (Q11)')
-        st.plotly_chart(apply_modern_layout(fig12), use_container_width=True)
+    with c14:
+        if not concepts.empty and not filtered_final.empty:
+            concepts.columns = concepts.columns.str.strip().str.lower()
+            concepts['failed'] = concepts['score_pct'] < 50
+            fails = concepts.groupby('student_id')['failed'].sum().reset_index(name='failed_count')
+            
+            seg = students[['student_id','group_id']].merge(fails, on='student_id', how='left').fillna(0)
+            seg = seg.merge(filtered_final.groupby('student_id')['score'].mean().reset_index(), on='student_id', how='left')
+            seg.dropna(subset=['score'], inplace=True)
+            
+            if not seg.empty:
+                def segment(row):
+                    if row['score'] >= 75 and row['failed_count'] == 0: return 'High-Achievers'
+                    elif row['score'] < 60: return 'At-Risk'
+                    return 'Average'
+                seg['segment'] = seg.apply(segment, axis=1)
+                
+                fig12 = px.pie(seg, names='segment', title='Strategic Student Segments (Q11)', hole=0.4)
+                st.plotly_chart(apply_modern_layout(fig12), use_container_width=True)
 
 # ==================== TAB 5 ====================
 with tab5:
     st.subheader("المخاطر والدمج")
-    # Risk Score
     if not attendance.empty and not concepts.empty:
+        concepts.columns = concepts.columns.str.strip().str.lower()
+        attendance.columns = attendance.columns.str.strip().str.lower()
+        
         att_risk = attendance.groupby('student_id')['is_present'].mean().reset_index()
         att_risk['risk_absence'] = 1 - att_risk['is_present']
         
-        fails = concepts.groupby('student_id')['score_pct'].apply(lambda x: (x < 50).sum()).reset_index(name='fails')
+        # حساب أعداد الرسوب بطريقة آمنة وسريعة
+        concepts['is_failed_concept'] = concepts['score_pct'] < 50
+        fails = concepts.groupby('student_id')['is_failed_concept'].sum().reset_index(name='fails')
         
         risk = students[['student_id', 'full_name']].merge(att_risk, on='student_id', how='left')
         risk = risk.merge(fails, on='student_id', how='left').fillna(0)
-        risk['risk_score'] = (risk['risk_absence'] * 0.5 + risk['fails'] * 0.5) * 100
+        
+        # تفعيل منبّه المخاطر الحسابي
+        risk['risk_score'] = (risk['risk_absence'] * 0.5 + (risk['fails'] / max(risk['fails'].max(), 1)) * 0.5) * 100
         
         top_risk = risk.nlargest(10, 'risk_score')
-        fig15 = px.bar(top_risk, x='risk_score', y='full_name', orientation='h', title='Top 10 At-Risk Students (Q14)')
-        st.plotly_chart(apply_modern_layout(fig15), use_container_width=True)
+        if not top_risk.empty:
+            fig15 = px.bar(top_risk, x='risk_score', y='full_name', orientation='h', title='Top 10 At-Risk Students (Q14)', color='risk_score', color_continuous_scale='Reds')
+            fig15.update_layout(yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(apply_modern_layout(fig15), use_container_width=True)
 
-st.success("✅ لوحة التحليلات تعمل بنجاح مع MongoDB!")
+st.success("✅ لوحة التحليلات تعمل بنجاح وبأمان كامل مع نظام الـ Pipeline لـ MongoDB!")
