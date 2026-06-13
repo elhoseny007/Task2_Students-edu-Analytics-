@@ -134,209 +134,99 @@ with col_title:
 
 st.write("---")
 
-
-# ====================== DATA LOADING – MongoDB ======================
-# 🔐 بيانات الاتصال محفوظة في Streamlit Secrets (مش hardcoded)
-# أنشئ ملف  .streamlit/secrets.toml  وحط فيه:
-#
-#   [mongo]
-#   uri = "mongodb+srv://elhosenyhassan007_db_user:<PASSWORD>@cluster0.x5jk1ox.mongodb.net/"
-#
-# أو من لوحة Streamlit Cloud: Settings → Secrets
-
 @st.cache_resource(show_spinner="🔗 جاري الاتصال بـ MongoDB …")
 def get_mongo_client():
     return MongoClient("mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/")
 
-@st.cache_data(show_spinner="⏳ جاري تحميل البيانات …")
+# ====================== GET MONGO CLIENT ======================
+def get_mongo_client():
+    # الرابط الخاص بك لقاعدة البيانات الحقيقية
+    return MongoClient("mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/")
+
+@st.cache_data(show_spinner="⏳ جاري تحميل البيانات الحقيقية من MongoDB …")
 def load_all_data():
-    import numpy as np
-    import hashlib
- 
     client = get_mongo_client()
-    db     = client["kayfa_analytics"]
+    # تأكد من اسم قاعدة البيانات الصحيحة المرفوعة على Cluster0
+    db = client["kayfa_analytics"] 
  
     def safe_collection(name: str) -> pd.DataFrame:
-        """سحب collection بأمان — يرجع DataFrame فاضي لو مش موجودة."""
+        """سحب الكوليكشن بشكل منفصل تماماً وتحويلها لـ DataFrame وتوحيد الـ IDs"""
         try:
             df = pd.DataFrame(list(db[name].find()))
+            if df.empty:
+                return pd.DataFrame()
+            
+            # تحويل الـ _id الأساسي لنص صريح بدلاً من ObjectId لضمان نجاح الـ Merge
             if "_id" in df.columns:
-                df.drop(columns=["_id"], inplace=True)
+                df["_id"] = df["_id"].astype(str)
+                
+            # تنظيف وتحويل المعرفات الفرعية لنصوص صريحة لربط الجداول ببعضها بدون مفقودات
+            for col in ["student_id", "course_id", "assignment_id", "user_id"]:
+                if col in df.columns:
+                    df[col] = df[col].astype(str).str.strip()
             return df
         except Exception:
             return pd.DataFrame()
  
     # ══════════════════════════════════════════════
-    # 1. المصدر الوحيد: students_summary
+    # 1. سحب الجداول الحقيقية المنفصلة من الـ Collections
     # ══════════════════════════════════════════════
-    students = safe_collection("students_summary")
-    if students.empty:
-        raise ValueError("students_summary collection فارغة أو غير موجودة!")
- 
-    final_df = students.copy()
- 
-    # تنظيف العمر
-    final_df["age"] = final_df["age"].abs()
-    final_df        = final_df[final_df["age"] <= 50]
- 
-    # avg_grade → score
-    if "avg_grade" in final_df.columns and "score" not in final_df.columns:
-        final_df.rename(columns={"avg_grade": "score"}, inplace=True)
-    final_df.dropna(subset=["score"], inplace=True)
-    final_df["score"] = final_df["score"].clip(0, 100)
-    final_df["max_score"] = 100
- 
-    # enrollment_date → date
-    if "enrollment_date" in final_df.columns and "date" not in final_df.columns:
-        final_df.rename(columns={"enrollment_date": "date"}, inplace=True)
-    if "date" in final_df.columns:
-        final_df["date"] = pd.to_datetime(final_df["date"])
- 
-    # type للتقييمات — نوزّعها بناءً على الكورس
-    if "type" not in final_df.columns:
-        type_map = {i: t for i, t in enumerate(["Quiz", "Assignment", "Project", "Exam", "Midterm"])}
-        final_df["type"] = [type_map[i % 5] for i in range(len(final_df))]
- 
-    # course_name لو مش موجود
-    if "course_name" not in final_df.columns and "course_id" in final_df.columns:
-        final_df["course_name"] = final_df["course_id"]
- 
+    users = safe_collection("users")
+    courses = safe_collection("courses")
+    enrollments = safe_collection("enrollments")
+    submissions = safe_collection("submissions")
+    interactions = safe_collection("interactions")
+    
+    # 🚨 تأمين احتياطي للمسميات (لو المونجو مخزن معرف الطالب كـ user_id)
+    for df in [enrollments, submissions, interactions]:
+        if not df.empty and "student_id" not in df.columns and "user_id" in df.columns:
+            df["student_id"] = df["user_id"]
+
     # ══════════════════════════════════════════════
-    # 2. groups — من students_summary
+    # 2. عمليات الدمج والتنظيف للبيانات (Data Processing)
     # ══════════════════════════════════════════════
-    stated_col = "stated_num_students" if "stated_num_students" in final_df.columns else None
-    if stated_col:
-        groups = (final_df[["group_id", stated_col]]
-                  .drop_duplicates("group_id").reset_index(drop=True))
-    else:
-        groups = (final_df[["group_id"]]
-                  .drop_duplicates().reset_index(drop=True))
-        groups["stated_num_students"] = 0
- 
+    
+    # تحويل التواريخ بشكل سليم لمنع الأخطاء في حساب الأسابيع والتفاعل
+    if not submissions.empty and "submitted_at" in submissions.columns:
+        submissions["submitted_at"] = pd.to_datetime(submissions["submitted_at"], errors='coerce')
+        
+    if not interactions.empty:
+        if "timestamp" in interactions.columns:
+            interactions["timestamp"] = pd.to_datetime(interactions["timestamp"], errors='coerce')
+        elif "event_datetime" in interactions.columns:
+            interactions["timestamp"] = pd.to_datetime(interactions["event_datetime"], errors='coerce')
+
+    # تنظيف الأعمدة الإضافية في التسليمات (الدرجات والـ Bounds) لو موجودة
+    if not submissions.empty and "score" in submissions.columns:
+        # حذف الصفوف الفاضية في الـ score لعدم تدمير المتوسطات
+        submissions = submissions.dropna(subset=['score'])
+        
+        # التأكد من حدود الدرجات (بين 0 والـ max_score)
+        submissions['score'] = pd.to_numeric(submissions['score'], errors='coerce').fillna(0)
+        submissions.loc[submissions['score'] < 0, 'score'] = 0
+        
+        if 'max_score' in submissions.columns:
+            over_score_mask = submissions['score'] > submissions['max_score']
+            submissions.loc[over_score_mask, 'score'] = submissions.loc[over_score_mask, 'max_score']
+        else:
+            submissions['max_score'] = 100
+            over_score_mask = submissions['score'] > 100
+            submissions.loc[over_score_mask, 'score'] = 100
+
+    # تنظيف الحضور (Interactions المخصصة للحضور والغياب) لو كوليكشن الـ interactions شايلة الـ status
+    if not interactions.empty and "status" in interactions.columns:
+        interactions['status_clean'] = interactions['status'].astype(str).str.strip().str.lower()
+        interactions['is_present'] = interactions['status_clean'].apply(
+            lambda x: 1 if ('attend' in x or 'present' in x) else 0
+        )
+
     # ══════════════════════════════════════════════
-    # 3. attendance — من attendance_rate في students_summary
+    # 3. إرجاع الجداول النظيفة والمنفصلة تماماً
     # ══════════════════════════════════════════════
-    att_real = safe_collection("attendance")
-    if not att_real.empty and "status" in att_real.columns:
-        att_real["status_clean"] = att_real["status"].astype(str).str.strip().str.lower()
-        att_real["is_present"]   = att_real["status_clean"].apply(
-            lambda x: 1 if ("attend" in x or "present" in x) else 0)
-        attendance = att_real
-    else:
-        # نبني attendance من attendance_rate
-        rng = np.random.default_rng(seed=42)
-        att_rows = []
-        for _, row in final_df.iterrows():
-            rate  = row.get("attendance_rate", 70) / 100
-            n_ses = 13  # عدد الجلسات التقريبي
-            presences = rng.binomial(1, min(max(rate, 0.01), 0.99), n_ses)
-            for ses_i, pres in enumerate(presences):
-                att_rows.append({
-                    "student_id": row["student_id"],
-                    "group_id":   row.get("group_id", ""),
-                    "session":    ses_i + 1,
-                    "is_present": int(pres)
-                })
-        attendance = pd.DataFrame(att_rows)
- 
-    # ══════════════════════════════════════════════
-    # 4. submissions — مبنية من students_summary
-    # ══════════════════════════════════════════════
-    sub_real = safe_collection("submissions")
-    if not sub_real.empty and "submitted_at" in sub_real.columns:
-        sub_real["submitted_at"] = pd.to_datetime(sub_real["submitted_at"])
-        submissions = sub_real
-    else:
-        rng2 = np.random.default_rng(seed=7)
-        sub_rows = []
-        base_date = pd.Timestamp("2025-12-01")
-        for _, row in final_df.iterrows():
-            n_assess = int(row.get("assessments", 5))
-            for a in range(n_assess):
-                week_offset = a * 2
-                is_late     = bool(rng2.binomial(1, 0.25))
-                sub_rows.append({
-                    "student_id":        row["student_id"],
-                    "course_id":         row.get("course_id", "C001"),
-                    "submitted_at":      base_date + pd.Timedelta(weeks=week_offset,
-                                                                   days=int(rng2.integers(0, 7))),
-                    "time_spent_minutes": int(rng2.integers(15, 180)),
-                    "attempts":          int(rng2.integers(1, 5)),
-                    "is_late":           is_late,
-                    "score":             float(rng2.uniform(40, 100))
-                })
-        submissions = pd.DataFrame(sub_rows)
-        submissions["submitted_at"] = pd.to_datetime(submissions["submitted_at"])
- 
-    # ══════════════════════════════════════════════
-    # 5. engagement — مبنية من students_summary
-    # ══════════════════════════════════════════════
-    eng_real = safe_collection("engagement")
-    if not eng_real.empty and "event_datetime" in eng_real.columns:
-        eng_real["event_datetime"] = pd.to_datetime(eng_real["event_datetime"])
-        engagement = eng_real
-    else:
-        rng3 = np.random.default_rng(seed=13)
-        devices = ["Mobile", "Desktop", "Tablet"]
-        eng_rows = []
-        base_date = pd.Timestamp("2025-12-01")
-        for _, row in final_df.iterrows():
-            # طالب أكثر حضوراً → أكثر تفاعلاً
-            rate   = row.get("attendance_rate", 70) / 100
-            n_evts = int(rng3.integers(5, 50) * rate)
-            for _ in range(max(n_evts, 1)):
-                eng_rows.append({
-                    "student_id":     row["student_id"],
-                    "group_id":       row.get("group_id", ""),
-                    "event_datetime": base_date + pd.Timedelta(
-                                         days=int(rng3.integers(0, 90))),
-                    "device": devices[rng3.integers(0, 3)]
-                })
-        engagement = pd.DataFrame(eng_rows)
-        engagement["event_datetime"] = pd.to_datetime(engagement["event_datetime"])
- 
-    # ══════════════════════════════════════════════
-    # 6. concepts — مبنية من students_summary
-    # ══════════════════════════════════════════════
-    con_real = safe_collection("concepts")
-    if not con_real.empty and "score_pct" in con_real.columns:
-        con_real["is_failed"] = con_real["score_pct"] < 50
-        concepts = con_real
-    else:
-        rng4 = np.random.default_rng(seed=99)
-        concept_names = [
-            "Variables & Types", "Control Flow", "Functions",
-            "Data Structures", "OOP", "Algorithms", "Databases", "APIs"
-        ]
-        con_rows = []
-        for _, row in final_df.iterrows():
-            base_score = row.get("score", 70)
-            for cname in concept_names:
-                sc = float(np.clip(rng4.normal(base_score, 15), 0, 100))
-                con_rows.append({
-                    "student_id":   row["student_id"],
-                    "concept_name": cname,
-                    "score_pct":    sc,
-                    "is_failed":    sc < 50
-                })
-        concepts = pd.DataFrame(con_rows)
- 
-    return final_df, attendance, concepts, engagement, submissions, groups, students
- 
- 
-# تحميل البيانات مرة واحدة
-try:
-    final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_data()
-except Exception as e:
-    st.error(f"❌ خطأ في الاتصال بـ MongoDB أو تحميل البيانات: {e}")
-    st.info("💡 تأكد إن ملف `.streamlit/secrets.toml` موجود وفيه `[mongo] uri = ...`")
-    st.stop()
- 
-if final_analysis_df.empty:
-    st.warning("⚠️ البيانات فارغة! تأكد من مسارات الملفات.")
-    st.stop()
- 
- 
+    return users, courses, enrollments, submissions, interactions
+
+# استدعاء الدالة وتوزيع المتغيرات على بقية الداشبورد
+users, courses, enrollments, submissions, interactions = load_all_data()
 # ====================== SIDEBAR ======================
 st.sidebar.header("🔍 لوحة التحكم والتصفية")
  
