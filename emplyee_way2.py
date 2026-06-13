@@ -11,14 +11,46 @@ import seaborn
 import json
 import os
 import warnings
+from pymongo import MongoClient
 
-# 1. إعداد الصفحة (يجب أن يكون أول أمر لـ Streamlit)
+# ====================== DATA LOADING & PIPELINE FROM MONGO ======================
+@st.cache_data # لمنع إعادة تحميل الداتا مع كل حركة في الداشبورد
+def load_all_pipeline_data_from_mongo():
+    # 1. سحب رابط الاتصال بأمان من إعدادات Streamlit Secrets
+    MONGO_URI = st.secrets["mongo"]["uri"]
+    
+    # 2. الاتصال بـ MongoDB
+    client = MongoClient(MONGO_URI)
+    
+    # 3. اسم قاعدة البيانات الحقيقي من الأطلس
+    db = client['kayfa_analytics']
+    
+    # 4. سحب الـ Collections وتحويلها فوراً لـ DataFrames
+    # (تأكد من رفع باقي الـ collections بنفس الأسماء المذكورة هنا)
+    students          = pd.DataFrame(list(db['students_summary'].find()))
+    attendance        = pd.DataFrame(list(db['attendance'].find()))
+    concepts          = pd.DataFrame(list(db['concepts'].find()))
+    engagement        = pd.DataFrame(list(db['engagement'].find()))
+    submissions       = pd.DataFrame(list(db['submissions'].find()))
+    groups            = pd.DataFrame(list(db['groups'].find()))
+    final_analysis_df = pd.DataFrame(list(db['final_analysis'].find()))
+    
+    # 5. تنظيف عمود الـ _id الخاص بمونجو من الـ DataFrames لمنع التضارب
+    for df in [final_analysis_df, attendance, concepts, engagement, submissions, groups, students]:
+        if df is not None and not df.empty and '_id' in df.columns:
+            df.drop(columns=['_id'], inplace=True)
+            
+    return final_analysis_df, attendance, concepts, engagement, submissions, groups, students
+
+# تشغيل الـ Pipeline وسحب الداتا كـ DataFrames جاهزة لباقي الكود
+final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data_from_mongo()
+
+# ====================== PAGE CONFIGURATION ======================
 st.set_page_config(
     page_title="Kayfa Platform - Full Executive Analytics",
     layout="wide",
     page_icon="📊"
 )
-
 # ====================== CSS STYLING ======================
 st.markdown("""
 <style>
@@ -127,9 +159,6 @@ def load_all_pipeline_data():
         engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'])
 
     return final_df, attendance, concepts, engagement, submissions, groups, students
-
-final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data()
-
 # ====================== SIDEBAR FILTER ======================
 st.sidebar.header("🔍 لوحة التحكم والتصفية")
 available_groups = sorted(final_analysis_df['group_id'].unique())
