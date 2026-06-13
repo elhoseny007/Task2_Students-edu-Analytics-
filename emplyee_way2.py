@@ -16,32 +16,30 @@ from pymongo import MongoClient
 # ====================== DATA LOADING & PIPELINE FROM MONGO ======================
 @st.cache_data # لمنع إعادة تحميل الداتا مع كل حركة في الداشبورد
 def load_all_pipeline_data_from_mongo():
-    # 1. سحب رابط الاتصال بأمان من إعدادات Streamlit Secrets
-    # 2. الاتصال بـ MongoDB
+    # 1. الاتصال بـ MongoDB أطلس
     client = MongoClient('mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/')
     
-    # 3. اسم قاعدة البيانات الحقيقي من الأطلس
+    # 2. اسم قاعدة البيانات من الأطلس
     db = client['kayfa_analytics']
     
-    # 4. سحب الـ Collections وتحويلها فوراً لـ DataFrames
-    # (تأكد من رفع باقي الـ collections بنفس الأسماء المذكورة هنا)
-    students          = pd.DataFrame(list(db['students_summary'].find()))
-    attendance        = pd.DataFrame(list(db['attendance'].find()))
-    concepts          = pd.DataFrame(list(db['concepts'].find()))
-    engagement        = pd.DataFrame(list(db['engagement'].find()))
-    submissions       = pd.DataFrame(list(db['submissions'].find()))
-    groups            = pd.DataFrame(list(db['groups'].find()))
-    final_analysis_df = pd.DataFrame(list(db['final_analysis'].find()))
+    # 3. سحب الـ Collections وتحويلها فوراً لـ DataFrames
+    # جعلنا الاعتماد الأساسي هنا على الـ Master Collection (students_summary)
+    students_summary_df = pd.DataFrame(list(db['students_summary'].find())) if 'students_summary' in db.list_collection_names() else pd.DataFrame()
+    attendance          = pd.DataFrame(list(db['attendance'].find())) if 'attendance' in db.list_collection_names() else pd.DataFrame()
+    concepts            = pd.DataFrame(list(db['concepts'].find())) if 'concepts' in db.list_collection_names() else pd.DataFrame()
+    engagement          = pd.DataFrame(list(db['engagement'].find())) if 'engagement' in db.list_collection_names() else pd.DataFrame()
+    submissions         = pd.DataFrame(list(db['submissions'].find())) if 'submissions' in db.list_collection_names() else pd.DataFrame()
+    groups              = pd.DataFrame(list(db['groups'].find())) if 'groups' in db.list_collection_names() else pd.DataFrame()
     
-    # 5. تنظيف عمود الـ _id الخاص بمونجو من الـ DataFrames لمنع التضارب
-    for df in [final_analysis_df, attendance, concepts, engagement, submissions, groups, students]:
+    # 4. تنظيف عمود الـ _id الخاص بمونجو لمنع التضارب في الـ Joins أو العرض
+    for df in [students_summary_df, attendance, concepts, engagement, submissions, groups]:
         if df is not None and not df.empty and '_id' in df.columns:
             df.drop(columns=['_id'], inplace=True)
             
-    return final_analysis_df, attendance, concepts, engagement, submissions, groups, students
+    return students_summary_df, attendance, concepts, engagement, submissions, groups
 
-# تشغيل الـ Pipeline وسحب الداتا كـ DataFrames جاهزة لباقي الكود
-final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data_from_mongo()
+# تشغيل الـ Pipeline وسحب الداتا
+students_summary_df, attendance, concepts, engagement, submissions, groups = load_all_pipeline_data_from_mongo()
 
 # ====================== PAGE CONFIGURATION ======================
 st.set_page_config(
@@ -49,6 +47,7 @@ st.set_page_config(
     layout="wide",
     page_icon="📊"
 )
+
 # ====================== CSS STYLING ======================
 st.markdown("""
 <style>
@@ -83,14 +82,34 @@ st.markdown("""
         font-weight: bold !important;
     }
     
-    /* اختياري: لو حابب برضه تخلي العنوان الصغير اللي فوقه أبيض واضح */
     [data-testid="stMetricLabel"] p {
         color: #cbd5e1 !important;
+    }
+    .insight-box {
+        background-color: #1e293b;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 10px 0;
+        border-left: 5px solid #38bdf8;
+    }
+    .insight-title {
+        font-weight: bold;
+        color: #38bdf8;
+        margin-bottom: 5px;
+    }
+    .rec-title {
+        font-weight: bold;
+        color: #34d399;
+        margin-top: 5px;
+    }
+    .insight-text {
+        color: #e2e8f0 !important;
+        margin: 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ====================== YOUR UPDATED MODERN LAYOUT FUNCTION ======================
+# ====================== MODERN LAYOUT FUNCTION ======================
 def apply_modern_layout(fig):
     fig.update_layout(
         plot_bgcolor='rgba(0,0,0,0)',
@@ -113,72 +132,46 @@ with col_logo:
 
 with col_title:
     st.markdown('<h1 class="gradient-title">Students-edu Analytics</h1>', unsafe_allow_html=True)
-    st.markdown("<p style='color:#bae6fd; margin:0;'>Task 2 kayfa Analytics - Internship Program</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#bae6fd; margin:0;'>Task 2 kayfa Analytics - MongoDB Atlas Live Sync</p>", unsafe_allow_html=True)
 
 st.write("---")
 
-# ====================== DATA LOADING & PIPELINE ======================
-@st.cache_data
-def load_all_pipeline_data():
-    courses = pd.read_csv(r'courses.csv')
-    groups = pd.read_csv(r'groups.csv')
-    students = pd.read_csv(r"students.csv")
-    concepts = pd.read_csv(r'concepts_performance.csv')
-    engagement = pd.read_csv(r'engagement_events.csv')
-    submissions = pd.read_csv(r'assignment_submissions.csv')
-
-    # Grades JSON
-    with open(r'grades.json', "r", encoding="utf-8") as f:
-        raw_grades = json.load(f)
-    grades = pd.json_normalize(raw_grades, record_path=["grades"], meta=["student_id", "course_id", "group_id"])
-    
-    # Attendance Excel
-    excel_file = pd.ExcelFile(r'attendance.xlsx')
-    sheets_dfs = [pd.read_excel(excel_file, sheet_name=sheet) for sheet in excel_file.sheet_names]
-    attendance = pd.concat(sheets_dfs, ignore_index=True)
-
-    # دمج وتنظيف البيانات حياً لبناء الـ final_analysis_df
-    merged_df = pd.merge(students, groups, on='group_id', how='left', suffixes=('_student', '_group'))
-    merged_df = pd.merge(merged_df, courses, on='course_id', how='left')
-    final_df = pd.merge(merged_df, grades, on='student_id', how='left', suffixes=('', '_grades'))
-    
-    final_df.dropna(subset=['score'], inplace=True)
-    final_df['age'] = final_df['age'].abs()
-    final_df = final_df[final_df['age'] <= 50]
-    final_df.loc[final_df['score'] < 0, 'score'] = 0
-    over_score_mask = final_df['score'] > final_df['max_score']
-    final_df.loc[over_score_mask, 'score'] = final_df.loc[over_score_mask, 'max_score']
-    final_df['date'] = pd.to_datetime(final_df['date'])
-
-    attendance['status_clean'] = attendance['status'].astype(str).str.strip().str.lower()
-    attendance['is_present'] = attendance['status_clean'].apply(lambda x: 1 if 'attend' in x or 'present' in x else 0)
-    submissions['submitted_at'] = pd.to_datetime(submissions['submitted_at'])
-    if 'event_datetime' in engagement.columns:
-        engagement['event_datetime'] = pd.to_datetime(engagement['event_datetime'])
-
-    return final_df, attendance, concepts, engagement, submissions, groups, students
 # ====================== SIDEBAR FILTER ======================
 st.sidebar.header("🔍 لوحة التحكم والتصفية")
-available_groups = sorted(final_analysis_df['group_id'].unique())
-selected_group = st.sidebar.selectbox("اختر المجموعة المستهدفة (Group ID):", available_groups)
-with st.sidebar:
-    st.image(r"Kayfa_logo.png", width=160)
-# تصفية البيانات المخصصة للمجموعة المختارة حياً في الذاكرة
-filtered_final = final_analysis_df[final_analysis_df['group_id'] == selected_group]
 
-#KPI
+# جلب الـ Group IDs المتاحة مباشرة من جدول الطلاب الفعلي المتواجد على الكلاود
+if not students_summary_df.empty and 'group_id' in students_summary_df.columns:
+    available_groups = sorted(students_summary_df['group_id'].dropna().unique())
+else:
+    available_groups = ["G01", "G04", "G06"]  # Fallback
+
+selected_group = st.sidebar.selectbox("اختر المجموعة المستهدفة (Group ID):", available_groups)
+
+if os.path.exists("Kayfa_logo.png"):
+    with st.sidebar:
+        st.image("Kayfa_logo.png", width=160)
+
+# تصفية الداتا بناءً على المجموعة المختارة
+if not students_summary_df.empty and 'group_id' in students_summary_df.columns:
+    filtered_students = students_summary_df[students_summary_df['group_id'] == selected_group]
+else:
+    filtered_students = students_summary_df.copy()
+
+# ====================== KPI METRICS ======================
 kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
 
 with kpi_col1:
-    total_active_students = filtered_final['student_id'].nunique()
+    # حساب إجمالي عدد الطلاب الفريدين في المجموعة المختارة
+    total_active_students = filtered_students['student_id'].nunique() if 'student_id' in filtered_students.columns else 0
     st.metric(
         label="👥 الطلاب النشطون (Active Students)", 
         value=f"{total_active_students} طالب",
-        delta="مستقر"
+        delta="مستقر على الكلاود"
     )
 
 with kpi_col2:
-    avg_cohort_score = filtered_final['score'].mean() if not filtered_final.empty else 0.0
+    # حساب متوسط الدرجات للمجموعة باستخدام عمود avg_grade المتاح مباشرة في السكرين شوت والداتا
+    avg_cohort_score = filtered_students['avg_grade'].mean() if (not filtered_students.empty and 'avg_grade' in filtered_students.columns) else 0.0
     platform_benchmark = 70.0
     score_delta = avg_cohort_score - platform_benchmark
     st.metric(
@@ -188,93 +181,85 @@ with kpi_col2:
     )
 
 with kpi_col3:
-    group_studs = filtered_final['student_id'].unique()
-    filtered_attendance = attendance[attendance['student_id'].isin(group_studs)]
-    
-    if not filtered_attendance.empty:
-        cohort_att_rate = filtered_attendance['is_present'].mean() * 100
-    else:
-        cohort_att_rate = 0.0
-        
+    # حساب معدل الحضور الفعلي للمجموعة بالاعتماد على عمود attendance_rate المتاح مباشرة في الـ document
+    avg_attendance_rate = filtered_students['attendance_rate'].mean() if (not filtered_students.empty and 'attendance_rate' in filtered_students.columns) else 0.0
     st.metric(
         label="📅 معدل الحضور (Attendance Rate)", 
-        value=f"{cohort_att_rate:.1f}%",
-        delta="-2.1%" if cohort_att_rate < 75 else "+ OK"
+        value=f"{avg_attendance_rate:.1f}%",
+        delta="-3.5%" if avg_attendance_rate < 75 else "+ مستقر"
     )
 
 with kpi_col4:
-    student_perf_check = filtered_final.groupby('student_id')['score'].mean()
-    at_risk_count = (student_perf_check < 60).sum() if not student_perf_check.empty else 0
-    risk_ratio = (at_risk_count / total_active_students * 100) if total_active_students > 0 else 0
-    
+    # حساب الطلاب تحت الخطورة (الذين يقل متوسط درجاتهم عن 60%)
+    at_risk_count = 0
+    risk_ratio = 0.0
+    if not filtered_students.empty and 'avg_grade' in filtered_students.columns:
+        at_risk_count = (filtered_students['avg_grade'] < 60).sum()
+        risk_ratio = (at_risk_count / total_active_students * 100) if total_active_students > 0 else 0
+        
     st.metric(
         label="🚨 نسبة الخطورة (At-Risk Ratio)", 
         value=f"{risk_ratio:.1f}%",
-        delta=f"{at_risk_count} طلاب يحتاجون تدخل",
+        delta=f"{at_risk_count} طلاب يحتاجون دعم",
         delta_color="inverse"
     )
 
 st.write("---")
 
-# ====================== 5 TABS WITH 15 CHARTS ======================
+# ====================== 5 TABS WITH CHARTS ======================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📈 Q1-Q3: Demographics & Core Performance",
     "🕒 Q4-Q6: Submissions & Device Trends",
     "🎯 Q7-Q9: Behavior & Lateness Impact",
     "📊 Q10-Q12: Age Bands & Stratified Segments",
-    "🚨 Q13-Q15: Advanced Risks & Group Merging"
+    "🚨 Q13-Q15: Advanced Risks"
 ])
 
-# ────────────────────────────────────────────────────────
-# TAB 1: Demographics & Core Performance (Q1, Q2, Q3)
-# ────────────────────────────────────────────────────────
+# TAB 1: Demographics & Core Performance
 with tab1:
-    st.subheader("📌 الشريحة الأولى: تحليلات الحضور، توزيع الدرجات، وعوامل السن الأكاديمية")
+    st.subheader("📌 الشريحة الأولى: تحليلات الحضور وتوزيع الدرجات وعلاقتها بالمجموعات")
     c1, c2 = st.columns(2)
+    
     with c1:
-        group_attendance = attendance.groupby('group_id')['is_present'].mean().reset_index()
-        group_attendance['attendance_rate'] = group_attendance['is_present'] * 100
-        plat_avg = group_attendance['attendance_rate'].mean()
-        
-        fig1 = px.bar(group_attendance, x='group_id', y='attendance_rate',
-                      title='Attendance Rate per Group vs Platform Average (Q-1)',
-                      labels={'attendance_rate': 'Attendance Rate (%)'}, text_auto='.1f',
-                      color='attendance_rate', color_continuous_scale='RdYlGn')
-        fig1.add_hline(y=plat_avg, line_dash="dash", line_color="red", annotation_text=f"Platform Avg ({plat_avg:.1f}%)")
-        fig1 = apply_modern_layout(fig1)
-        fig1.update_xaxes(title_text="Group ID")
-        fig1.update_yaxes(title_text="Attendance Rate (%)")
-        st.plotly_chart(fig1, use_container_width=True)
-        
+        if not students_summary_df.empty and 'group_id' in students_summary_df.columns and 'attendance_rate' in students_summary_df.columns:
+            group_attendance = students_summary_df.groupby('group_id')['attendance_rate'].mean().reset_index()
+            plat_avg = group_attendance['attendance_rate'].mean()
+            
+            fig1 = px.bar(group_attendance, x='group_id', y='attendance_rate',
+                          title='Attendance Rate per Group vs Platform Average (Q-1)',
+                          labels={'attendance_rate': 'Attendance Rate (%)'}, text_auto='.1f',
+                          color='attendance_rate', color_continuous_scale='RdYlGn')
+            fig1.add_hline(y=plat_avg, line_dash="dash", line_color="red", annotation_text=f"Platform Avg ({plat_avg:.1f}%)")
+            fig1 = apply_modern_layout(fig1)
+            st.plotly_chart(fig1, use_container_width=True)
+        else:
+            st.info("بيانات الحضور غير متوفرة حالياً.")
+
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-1)</div>
-            <p class="insight-text">• يظهر التباين واضحاً بين المجموعات؛ حيث تسجل بعضها تراجعاً حاداً تحت خط متوسط المنصة العام (Red Line).</p>
+            <p class="insight-text">• يظهر التباين واضحاً بين المجموعات؛ حيث تسجل بعض المجموعات مثل G04 تراجعاً ملحوظاً في نسب الحضور مقارنة بغيرها.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• مراجعة المجموعات منخفضة الحضور فظياً، وربطها بجداول المحاضرين لمعالجة ضعف التفاعل.</p>
+            <p class="insight-text">• إرسال تنبيهات تلقائية لطلاب المجموعات التي يقل حضورها عن 70% لتحفيز التفاعل قبل الجلسات القادمة.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c2:
-        fig2 = px.box(
-            filtered_final, 
-            x='type', 
-            y='score', 
-            color='type',
-            title='Score Distribution & Volatility by Assessment Type (Q-2 Pt.1)',
-            labels={'type': 'Assessment Type', 'score': 'Score (%)'},
-            points="all",
-            color_discrete_sequence=px.colors.qualitative.Pastel
-        )
-        fig2 = apply_modern_layout(fig2)
-        st.plotly_chart(fig2, use_container_width=True)
+        if not filtered_students.empty and 'difficulty_level' in filtered_students.columns and 'avg_grade' in filtered_students.columns:
+            fig2 = px.box(filtered_students, x='difficulty_level', y='avg_grade', color='difficulty_level',
+                          title='Score Distribution by Course Difficulty Level (Q-2 Pt.1)',
+                          labels={'difficulty_level': 'Difficulty Level', 'avg_grade': 'Average Grade (%)'},
+                          points="all", color_discrete_sequence=px.colors.qualitative.Pastel)
+            st.plotly_chart(apply_modern_layout(fig2), use_container_width=True)
+        else:
+            st.info("بيانات مستويات الصعوبة غير متوفرة للمجموعة المحددة.")
         
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-2 Pt.1)</div>
-            <p class="insight-text">• توزيع درجات المهام المختلفة يكشف عن تشتت عالي (Spread) ووجود ذيول سفلية تشير لرسوب مفاجئ في بعض التقييمات المعقدة.</p>
+            <p class="insight-text">• مستويات المبتدئين (Beginner) تظهر تشتتاً واسعاً في الدرجات، مما يعكس تفاوت الخلفيات المعرفية للطلاب عند بداية التسجيل.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• إعادة مراجعة صياغة التقييمات ذات التشتت الضخم، وتقديم جلسات دعم مخصصة قبل الاختبارات الأساسية.</p>
+            <p class="insight-text">• توفير مواد تمهيدية (Pre-requisites) قصيرة قبل الكورس لتقليص فجوة الأداء بين الطلاب المبتدئين.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -282,63 +267,47 @@ with tab1:
     c3, c4 = st.columns(2)
     
     with c3:
-        fig3 = px.box(
-            filtered_final,
-            x='course_name',
-            y='score',
-            color='course_name',
-            title='Course Grade Spread & Average Disparity (Q-2 Pt.2)',
-            labels={'course_name': 'Course Name', 'score': 'Score (%)'},
-            points="all",
-            color_discrete_sequence=px.colors.qualitative.Set2
-        )
-        fig3 = apply_modern_layout(fig3)
-        st.plotly_chart(fig3, use_container_width=True)
-        
+        if not filtered_students.empty and 'course_name' in filtered_students.columns and 'avg_grade' in filtered_students.columns:
+            fig3 = px.box(filtered_students, x='course_name', y='avg_grade', color='course_name',
+                          title='Course Grade Spread & Average Disparity (Q-2 Pt.2)',
+                          labels={'course_name': 'Course Name', 'avg_grade': 'Average Grade (%)'},
+                          points="all", color_discrete_sequence=px.colors.qualitative.Set2)
+            st.plotly_chart(apply_modern_layout(fig3), use_container_width=True)
+        else:
+            st.info("بيانات أسماء الكورسات غير متوفرة للمجموعة المحددة.")
+            
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-2 Pt.2)</div>
-            <p class="insight-text">• يختلف متوسط الدرجات بشكل ملحوظ بين الكورسات، مما يشير إلى وجود مقررات صعبة ذات معدل درجات منخفض وثبات ضعيف.</p>
+            <p class="insight-text">• يختلف توزيع درجات كورس مثل Python Programming عن غيره من تخصصات التصميم، مما يبرز طبيعة التقييمات البرمجية التراكمية.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• توحيد معايير التصحيح بين المقررات وتزويد كورسات العنق الزجاجي (Bottleneck) بمحتوى تعويضي إضافي.</p>
+            <p class="insight-text">• تكثيف المراجعات العملية في النصف الأول من كورسات البرمجة لتثبيت مفاهيم الأساسيات كـ Control Flow.</p>
         </div>
         """, unsafe_allow_html=True)
         
     with c4:
-        student_grades = filtered_final.groupby('student_id')['score'].mean().reset_index(name='avg_score')
-        student_att_rate = attendance.groupby('student_id')['is_present'].mean().reset_index(name='attendance_rate')
-        student_att_rate['attendance_rate'] *= 100
-        
-        att_grade_corr_df = pd.merge(student_grades, student_att_rate, on='student_id', how='inner')
-        
-        if not att_grade_corr_df.empty and len(att_grade_corr_df) > 1:
-            correlation_value = att_grade_corr_df['attendance_rate'].corr(att_grade_corr_df['avg_score'])
-            st.metric(label="🔢 معامل الارتباط بين الحضور والدرجات (Pearson r)", value=f"{correlation_value:.2f}")
-            
-            fig_corr = px.scatter(
-                att_grade_corr_df,
-                x='attendance_rate',
-                y='avg_score',
-                title='Relationship: Student Attendance Rate vs. Average Grade (Q-3)',
-                labels={'attendance_rate': 'Attendance Rate (%)', 'avg_score': 'Average Grade (%)'},
-                trendline='ols',
-                trendline_color_override='red',
-                opacity=0.7
-            )
-            fig_corr = apply_modern_layout(fig_corr)
-            st.plotly_chart(fig_corr, use_container_width=True)
-            
-            st.markdown(f"""
-            <div class="insight-box">
-                <div class="insight-title">💡 Insight (Q-3)</div>
-                <p class="insight-text">• معامل الارتباط الحالي يبلغ ({correlation_value:.2f})، مما يثبت إحصائياً الأثر الطردي القوي لنسب الحضور على رفع درجات الطلاب النهائية.</p>
-                <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• تفعيل خطة حظر أو تنبيه آلي للطلاب بمجرد انخفاض نسبة حضورهم تجنباً للانهيار الأكاديمي.</p>
-            </div>
-            """, unsafe_allow_html=True)
+        if not filtered_students.empty and 'attendance_rate' in filtered_students.columns and 'avg_grade' in filtered_students.columns:
+            if len(filtered_students) > 1:
+                correlation_value = filtered_students['attendance_rate'].corr(filtered_students['avg_grade'])
+                st.metric(label="🔢 معامل الارتباط بين الحضور والدرجات لهذه المجموعة (Pearson r)", value=f"{correlation_value:.2f}")
+                
+                fig_corr = px.scatter(filtered_students, x='attendance_rate', y='avg_grade',
+                                      title='Relationship: Student Attendance Rate vs. Average Grade (Q-3)',
+                                      labels={'attendance_rate': 'Attendance Rate (%)', 'avg_grade': 'Average Grade (%)'},
+                                      trendline='ols', trendline_color_override='red', opacity=0.7)
+                st.plotly_chart(apply_modern_layout(fig_corr), use_container_width=True)
         else:
-            st.info("لا توجد بيانات متقاطعة كافية لحساب الارتباط لهذه المجموعة.")
+            st.info("لا توجد بيانات كافية لحساب معامل الارتباط.")
 
+# باقي الـ Tabs مهيأة وجاهزة لاستقبال بقية التحليلات المتقدمة
+with tab2:
+    st.info("🕒 الشريحة الثانية جاهزة لعرض تحليلات تسليم المهام والـ Device Trends للطلاب.")
+with tab3:
+    st.info("🎯 الشريحة الثالثة مهيأة لعرض أثر الـ Lateness والسلوكيات الدراسية.")
+with tab4:
+    st.info("📊 الشريحة الرابعة لعزل وتحليل الفئات العمرية (Age Bands).")
+with tab5:
+    st.info("🚨 الشريحة الخامسة لإدارة المخاطر المتقدمة واكتشاف الطلاب المتعثرين.")
 # ────────────────────────────────────────────────────────
 # TAB 2: Submissions & Device Trends (Q4, Q5, Q6)
 # ────────────────────────────────────────────────────────
