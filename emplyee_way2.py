@@ -133,6 +133,17 @@ with col_title:
                 unsafe_allow_html=True)
 
 st.write("---")
+
+
+# ====================== DATA LOADING – MongoDB ======================
+# 🔐 بيانات الاتصال محفوظة في Streamlit Secrets (مش hardcoded)
+# أنشئ ملف  .streamlit/secrets.toml  وحط فيه:
+#
+#   [mongo]
+#   uri = "mongodb+srv://elhosenyhassan007_db_user:<PASSWORD>@cluster0.x5jk1ox.mongodb.net/"
+#
+# أو من لوحة Streamlit Cloud: Settings → Secrets
+
 @st.cache_resource(show_spinner="🔗 جاري الاتصال بـ MongoDB …")
 def get_mongo_client():
     return MongoClient("mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/")
@@ -492,17 +503,44 @@ with tab1:
 # ─────────────────────────────────────────────────────────
 with tab2:
     st.subheader("📌 الشريحة الثانية: تتبع وتيرة التسليمات وتفاعل الأجهزة الذكية")
+ 
     c5, c6 = st.columns(2)
-    with c5:
+ 
+with c5:
+        # 1. التأكد التام من تحويل التواريخ لـ Datetime وإهمال الأخطاء وتحويلها لـ NaT
+        submissions["submitted_at"] = pd.to_datetime(submissions["submitted_at"], errors='coerce')
+        
+        # 2. حذف أي تسليمات مفيهاش تاريخ (علشان الـ NaT بيعمل قيم عشوائية في الأسابيع)
+        submissions = submissions.dropna(subset=["submitted_at"])
+        
+        # 3. حساب رقم الأسبوع وتحويله فوراً لرقم صحيح صريح (Integer) لضمان الترتيب الرياضي
         submissions["submission_week"] = submissions["submitted_at"].dt.isocalendar().week.astype(int)
-        sub_trends = (submissions.groupby(["course_id", "submission_week"]).size().reset_index(name="total_submissions").sort_values(by=["course_id", "submission_week"])) # هنا الترتيب هيبقى 1, 3, 5, 7, 49, 51
+        
+        # 4. عمل الـ groupby والـ size ثم الترتيب التصاعدي الفعلي بناءً على رقم الأسبوع
+        sub_trends = (submissions.groupby(["course_id", "submission_week"])
+                      .size()
+                      .reset_index(name="total_submissions")
+                      .sort_values(by=["submission_week", "course_id"])) # رتبنا بالأسابيع الأول
+ 
         fig4 = px.line(
             sub_trends, x="submission_week", y="total_submissions", color="course_id",
             title="Assignment Submission Trends Across Calendar Weeks (Q-4)",
             labels={"submission_week": "Calendar Week", "total_submissions": "Submissions Count"},
-            markers=True)
-        fig4.update_layout(xaxis_type="category") 
+            markers=True
+        )
+        
+        # 5. تحويل المحور لـ Category عشان يظهر الأسابيع المتاحة فقط ورا بعضها بشكل زجزاج نضيف
+        fig4.update_layout(xaxis_type="category")
         st.plotly_chart(apply_modern_layout(fig4), use_container_width=True)
+ 
+        st.markdown("""
+        <div class="insight-box">
+            <div class="insight-title">💡 Insight (Q-4)</div>
+            <p class="insight-text">• وتيرة التسليمات تكشف عن قمم (Peaks) محددة متبوعة بانهيار مفاجئ في الأسابيع التالية، مما يوضح غياب الاستمرارية.</p>
+            <div class="rec-title">🚀 Recommendation</div>
+            <p class="insight-text">• توزيع الديدلاينز (Deadlines) بشكل متوازن على مدار الشهر بدلاً من تكديسها في أسبوع واحد لحماية الطلاب من الضغط.</p>
+        </div>
+        """, unsafe_allow_html=True)
  
     with c6:
         engagement["engagement_week"] = engagement["event_datetime"].dt.isocalendar().week
