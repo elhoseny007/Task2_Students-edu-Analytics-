@@ -18,7 +18,7 @@ from pymongo import MongoClient
 def load_all_pipeline_data_from_mongo():
     # 1. سحب رابط الاتصال بأمان من إعدادات Streamlit Secrets
     # 2. الاتصال بـ MongoDB
-    client = MongoClient('mongodb+srv://elhosenyhassan007_db_user:<db_password>@cluster0.x5jk1ox.mongodb.net/')
+    client = MongoClient('mongodb+srv://elhosenyhassan007_db_user:r430XpUrMLzqI1EC@cluster0.x5jk1ox.mongodb.net/')
     
     # 3. اسم قاعدة البيانات الحقيقي من الأطلس
     db = client['kayfa_analytics']
