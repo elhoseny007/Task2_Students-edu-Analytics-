@@ -146,9 +146,7 @@ st.write("---")
 
 @st.cache_resource(show_spinner="🔗 جاري الاتصال بـ MongoDB …")
 def get_mongo_client():
-    """اتصال واحد بيتعاد استخدامه طول جلسة التطبيق."""
-    uri = st.secrets["mongo"]["uri"]
-    return MongoClient(uri)
+    return MongoClient("mongodb+srv://elhosenyhassan007_db_user:<PASSWORD>@cluster0.x5jk1ox.mongodb.net/")
 
 @st.cache_data(show_spinner="⏳ جاري تحميل البيانات …")
 def load_all_data():
