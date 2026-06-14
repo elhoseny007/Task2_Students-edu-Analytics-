@@ -732,36 +732,36 @@ with tab5:
         </div>
         """, unsafe_allow_html=True)
 
-group_trends_df = final_analysis_df.copy()
-group_trends_df['date'] = pd.to_datetime(group_trends_df['date'])
-group_trends_df = group_trends_df.sort_values(by='date')
+    group_trends_df = final_analysis_df.copy()
+    group_trends_df['date'] = pd.to_datetime(group_trends_df['date'])
+    group_trends_df = group_trends_df.sort_values(by='date')
 
 # 2. حساب متوسط الدرجات لكل مجموعة بناءً على تاريخ التقييم وعنوانه
-group_monthly_perf = group_trends_df.groupby(['group_id', 'assessment_title', 'date'])['score'].mean().reset_index()
-group_monthly_perf = group_monthly_perf.sort_values(by=['group_id', 'date'])
+    group_monthly_perf = group_trends_df.groupby(['group_id', 'assessment_title', 'date'])['score'].mean().reset_index()
+    group_monthly_perf = group_monthly_perf.sort_values(by=['group_id', 'date'])
 
 # 3. بناء الرسم البياني الخطي بشكل منظم ونظيف
-fig_group_trends = px.line(
-    group_monthly_perf, 
-    x='assessment_title', 
-    y='score', 
-    color='group_id',
-    title="📊 تتبع أداء المجموعات عبر التقييمات المتتالية (Trending Up vs Sliding Down)",
-    labels={'assessment_title': 'التقييمات بالترتيب الزمني', 'score': 'متوسط الدرجات', 'group_id': 'المجموعة'},
-    markers=True
-)
+    fig_group_trends = px.line(
+        group_monthly_perf, 
+        x='assessment_title', 
+        y='score', 
+        color='group_id',
+        title="📊 تتبع أداء المجموعات عبر التقييمات المتتالية (Trending Up vs Sliding Down)",
+        labels={'assessment_title': 'التقييمات بالترتيب الزمني', 'score': 'متوسط الدرجات', 'group_id': 'المجموعة'},
+        markers=True
+    )
 
 # 4. تحسين مظهر المحور الأفقي ومنع تداخل النصوص (تدوير الكلمات 45 درجة)
-fig_group_trends.update_layout(
-    xaxis=dict(
-        type='category',
-        tickangle=45,
-        title_font=dict(size=14),
-    ),
-    yaxis=dict(title_font=dict(size=14)),
-    legend=dict(title="المجموعات", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    height=550 # زيادة الارتفاع ليعطي مساحة مريحة للعين
-)
+    fig_group_trends.update_layout(
+        xaxis=dict(
+            type='category',
+            tickangle=45,
+            title_font=dict(size=14),
+        ),
+        yaxis=dict(title_font=dict(size=14)),
+        legend=dict(title="المجموعات", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        height=550 # زيادة الارتفاع ليعطي مساحة مريحة للعين
+    )
 
 # 5. عرض الرسمة في الـ Dashboard
 st.plotly_chart(apply_modern_layout(fig_group_trends) if 'apply_modern_layout' in globals() else fig_group_trends, use_container_width=True)#app week2
