@@ -90,20 +90,20 @@ st.write("---")
 # ====================== DATA LOADING & PIPELINE ======================
 @st.cache_data
 def load_all_pipeline_data():
-    courses = pd.read_csv(r'courses.csv')
-    groups = pd.read_csv(r'groups.csv')
-    students = pd.read_csv(r"students.csv")
-    concepts = pd.read_csv(r'concepts_performance.csv')
-    engagement = pd.read_csv(r'engagement_events.csv')
-    submissions = pd.read_csv(r'assignment_submissions.csv')
+    courses = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\courses.csv')
+    groups = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\groups.csv')
+    students = pd.read_csv(r"d:\Desktop\Data Analysis\Internship\students.csv")
+    concepts = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\concepts_performance.csv')
+    engagement = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\engagement_events.csv')
+    submissions = pd.read_csv(r'd:\Desktop\Data Analysis\Internship\assignment_submissions.csv')
 
     # Grades JSON
-    with open(r'grades.json', "r", encoding="utf-8") as f:
+    with open(r'd:\Desktop\Data Analysis\Internship\grades.json', "r", encoding="utf-8") as f:
         raw_grades = json.load(f)
     grades = pd.json_normalize(raw_grades, record_path=["grades"], meta=["student_id", "course_id", "group_id"])
     
     # Attendance Excel
-    excel_file = pd.ExcelFile(r'attendance.xlsx')
+    excel_file = pd.ExcelFile(r'd:\Desktop\Data Analysis\Internship\attendance.xlsx')
     sheets_dfs = [pd.read_excel(excel_file, sheet_name=sheet) for sheet in excel_file.sheet_names]
     attendance = pd.concat(sheets_dfs, ignore_index=True)
 
@@ -339,24 +339,67 @@ with tab2:
         """, unsafe_allow_html=True)
 
     with c6:
-        engagement['engagement_week'] = engagement['event_datetime'].dt.isocalendar().week
-        weekly_eng = engagement.groupby('engagement_week').size().reset_index(name='total_events')
+            # --- 1. تجهيز وتنظيف مؤشرات التفاعل (Engagement) لكل طالب ---
+            # حساب عدد مرات تسجيل الدخول لكل طالب
+            student_logins = engagement[engagement['event_type'] == 'login'].groupby('student_id').size().reset_index(name='login_count')
+
+        # تصفية وقت مشاهدة الفيديوهات من القيم السالبة أو الخيالية (أقل من ساعتين)
+            valid_videos = engagement[
+                (engagement['event_type'] == 'video_watch') & 
+                (engagement['duration_seconds'] > 0) & 
+                (engagement['duration_seconds'] < 7200)
+            ]
+
+        # حساب إجمالي وقت المشاهدة لكل طالب وتحويله إلى دقائق
+            student_video_time = valid_videos.groupby('student_id')['duration_seconds'].sum().reset_index(name='total_watch_time_mins')
+            student_video_time['total_watch_time_mins'] = student_video_time['total_watch_time_mins'] / 60
+
+            # دمج مؤشرات التفاعل معاً لكل الطلاب
+            student_engagement = pd.merge(student_logins, student_video_time, on='student_id', how='outer').fillna(0)
+
+            student_grades = final_analysis_df.groupby('student_id')['score'].mean().reset_index(name='average_grade')
+
+            correlation_df = pd.merge(student_engagement, student_grades, on='student_id', how='inner')
+
+            corr_logins = correlation_df['login_count'].corr(correlation_df['average_grade'])
+            corr_video = correlation_df['total_watch_time_mins'].corr(correlation_df['average_grade'])
+
+
+        # --- 4. بناء الرسوم البيانية وعرضها ---
+            st.subheader("Engagement vs Academic Performance Analysis")
         
-        fig5 = px.line(weekly_eng, x='engagement_week', y='total_events',
-                       title='Total Engagement Events Across Weeks (Mid-Course Slump Testing) (Q-5)',
-                       labels={'engagement_week': 'Calendar Week', 'total_events': 'Total Events'}, markers=True)
-        fig5.update_traces(line_color='purple', line_width=3)
-        fig5.update_layout(xaxis_type='category')
-        st.plotly_chart(apply_modern_layout(fig5), use_container_width=True)
+        # عرض قوة الارتباط بالأرقام كـ Metrics داخل الـ container
+            metric_col1, metric_col2 = st.columns(2)
+            with metric_col1:
+                st.metric(label="Logins vs Grades Correlation", value=f"{corr_logins:.2f}")
+            with metric_col2:
+                st.metric(label="Watch Time vs Grades Correlation", value=f"{corr_video:.2f}")
+
+        # تحديد المؤشر المفضل للرسم (يمكنك اختيار رسمة وقت المشاهدة لأنها تعبر عن التفاعل الفعلي)
+            fig5 = px.scatter(
+                correlation_df, 
+                x='total_watch_time_mins', 
+                y='average_grade',
+                title='Link Strength: Total Video-Watch Time vs Academic Performance (Q-Engagement)',
+                labels={'total_watch_time_mins': 'Total Watch Time (Minutes)', 'average_grade': 'Average Grade'},
+                trendline="ols", 
+                trendline_color_override="red"
+            )
         
-        st.markdown("""
-        <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-5)</div>
-            <p class="insight-text">• رصد انخفاض ملحوظ في أحداث التفاعل بمنتصف الكورس (Mid-Course Slump)، وهو مؤشر نفسي خطير لملل الطلاب وفقدان الحماس الشائع.</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• إطلاق مسابقات تحفيزية (Gamification) أو تحديات تفاعلية قصيرة في هذه الأسابيع الحرجة لإعادة تنشيط الحركة الرقمية.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        # تنسيق النقاط وخط الاتجاه ليتناسب مع بقية مشروعك
+            fig5.update_traces(marker=dict(size=6, color='purple', opacity=0.6))
+        
+        # عرض الرسمة باستخدام التنسيق العصري الخاص بك
+            st.plotly_chart(apply_modern_layout(fig5) if 'apply_modern_layout' in globals() else fig5, use_container_width=True)
+        
+            st.markdown("""
+            <div class="insight-box">
+                <div class="insight-title">💡 Insight (Q-5)</div>
+                <p class="insight-text">• رصد انخفاض ملحوظ في أحداث التفاعل بمنتصف الكورس (Mid-Course Slump)، وهو مؤشر نفسي خطير لملل الطلاب وفقدان الحماس الشائع.</p>
+                <div class="rec-title">🚀 Recommendation</div>
+                <p class="insight-text">• إطلاق مسابقات تحفيزية (Gamification) أو تحديات تفاعلية قصيرة في هذه الأسابيع الحرجة لإعادة تنشيط الحركة الرقمية.</p>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.write("---")
     c7, c8 = st.columns(2)
@@ -689,7 +732,36 @@ with tab5:
         </div>
         """, unsafe_allow_html=True)
 
-if final_analysis_df.empty:
-    st.warning("⚠️ لم يتم العثور على بيانات! تأكد من صحة مسارات ملفات الـ CSV والإكسيل.")
-#app week2
-#https://bfjdjtad47rhd95xmcjrwe.streamlit.app/
+group_trends_df = final_analysis_df.copy()
+group_trends_df['date'] = pd.to_datetime(group_trends_df['date'])
+group_trends_df = group_trends_df.sort_values(by='date')
+
+# 2. حساب متوسط الدرجات لكل مجموعة بناءً على تاريخ التقييم وعنوانه
+group_monthly_perf = group_trends_df.groupby(['group_id', 'assessment_title', 'date'])['score'].mean().reset_index()
+group_monthly_perf = group_monthly_perf.sort_values(by=['group_id', 'date'])
+
+# 3. بناء الرسم البياني الخطي بشكل منظم ونظيف
+fig_group_trends = px.line(
+    group_monthly_perf, 
+    x='assessment_title', 
+    y='score', 
+    color='group_id',
+    title="📊 تتبع أداء المجموعات عبر التقييمات المتتالية (Trending Up vs Sliding Down)",
+    labels={'assessment_title': 'التقييمات بالترتيب الزمني', 'score': 'متوسط الدرجات', 'group_id': 'المجموعة'},
+    markers=True
+)
+
+# 4. تحسين مظهر المحور الأفقي ومنع تداخل النصوص (تدوير الكلمات 45 درجة)
+fig_group_trends.update_layout(
+    xaxis=dict(
+        type='category',
+        tickangle=45,
+        title_font=dict(size=14),
+    ),
+    yaxis=dict(title_font=dict(size=14)),
+    legend=dict(title="المجموعات", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    height=550 # زيادة الارتفاع ليعطي مساحة مريحة للعين
+)
+
+# 5. عرض الرسمة في الـ Dashboard
+st.plotly_chart(apply_modern_layout(fig_group_trends) if 'apply_modern_layout' in globals() else fig_group_trends, use_container_width=True)#app week2
