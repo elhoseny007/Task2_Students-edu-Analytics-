@@ -765,3 +765,4 @@ fig_group_trends.update_layout(
 
 # 5. عرض الرسمة في الـ Dashboard
 st.plotly_chart(apply_modern_layout(fig_group_trends) if 'apply_modern_layout' in globals() else fig_group_trends, use_container_width=True)#app week2
+#https://bfjdjtad47rhd95xmcjrwe.streamlit.app/
