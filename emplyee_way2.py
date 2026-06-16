@@ -680,7 +680,7 @@ with tab5:
         
         if not recommendations_df.empty:
             fig14 = px.histogram(recommendations_df, x='Recommended_Target_Group',
-                                 title=f'Euclidean Recommendation: Where to Merge Students from {smallest_group} (Q-13)',
+                                 title=f'Euclidean Recommendation: Where to Merge Students from G10 (Q-13)',
                                  labels={'Recommended_Target_Group': 'Suggested Target Group'}, color_discrete_sequence=['#ff7f0e'])
             st.plotly_chart(apply_modern_layout(fig14), use_container_width=True)
             
