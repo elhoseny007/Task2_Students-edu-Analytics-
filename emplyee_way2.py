@@ -902,4 +902,4 @@ with tab5:
 
     # Render clean chart inside your Streamlit Tab
     st.plotly_chart(apply_modern_layout(fig_summary_scatter) if 'apply_modern_layout' in globals() else fig_summary_scatter, use_container_width=True)
-    st.write("---")streamlit.app/
+    st.write("---")
