@@ -144,22 +144,25 @@ def load_all_pipeline_data():
 final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data()
 
 # ====================== SIDEBAR FILTER ======================
-st.sidebar.header("🔍 لوحة التحكم والتصفية")
+st.sidebar.header("🔍 Control Panel & Filtering")
 available_groups = sorted(final_analysis_df['group_id'].unique())
-selected_group = st.sidebar.selectbox("اختر المجموعة المستهدفة (Group ID):", available_groups)
+selected_group = st.sidebar.selectbox("Select Target Group (Group ID):", available_groups)
+
 with st.sidebar:
     st.image(r"Kayfa_logo.png", width=160)
-# تصفية البيانات المخصصة للمجموعة المختارة حياً في الذاكرة
+
+# Filter data dynamically in memory for the selected group
 filtered_final = final_analysis_df[final_analysis_df['group_id'] == selected_group]
 
-#KPI
+# KPI Columns
 kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+
 with kpi_col1:
     total_active_students = filtered_final['student_id'].nunique()
     st.metric(
-        label="👥 الطلاب النشطون (Active Students)", 
-        value=f"{total_active_students} طالب",
-        delta="مستقر"
+        label="👥 Active Students", 
+        value=f"{total_active_students}",
+        delta="Stable"
     )
 
 with kpi_col2:
@@ -167,9 +170,9 @@ with kpi_col2:
     platform_benchmark = 70.0
     score_delta = avg_cohort_score - platform_benchmark
     st.metric(
-        label="🎯 متوسط درجات المجموعة (Avg Grade)", 
+        label="🎯 Avg Grade", 
         value=f"{avg_cohort_score:.1f}%",
-        delta=f"{score_delta:+.1f}% vs المنصة"
+        delta=f"{score_delta:+.1f}% vs Platform"
     )
 
 with kpi_col3:
@@ -182,7 +185,7 @@ with kpi_col3:
         cohort_att_rate = 0.0
         
     st.metric(
-        label="📅 معدل الحضور (Attendance Rate)", 
+        label="📅 Attendance Rate", 
         value=f"{cohort_att_rate:.1f}%",
         delta="-2.1%" if cohort_att_rate < 75 else "+ OK"
     )
@@ -193,9 +196,9 @@ with kpi_col4:
     risk_ratio = (at_risk_count / total_active_students * 100) if total_active_students > 0 else 0
     
     st.metric(
-        label="🚨 نسبة الخطورة (At-Risk Ratio)", 
+        label="🚨 At-Risk Ratio", 
         value=f"{risk_ratio:.1f}%",
-        delta=f"{at_risk_count} طلاب يحتاجون تدخل",
+        delta=f"{at_risk_count} Students need support",
         delta_color="inverse"
     )
 
@@ -214,7 +217,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # TAB 1: Demographics & Core Performance (Q1, Q2, Q3)
 # ────────────────────────────────────────────────────────
 with tab1:
-    st.subheader("📌 الشريحة الأولى: تحليلات الحضور، توزيع الدرجات، وعوامل السن الأكاديمية")
+    st.subheader("📌 Section 1: Attendance Analytics, Grade Distribution, and Academic Age Factors")
     c1, c2 = st.columns(2)
     with c1:
         group_attendance = attendance.groupby('group_id')['is_present'].mean().reset_index()
@@ -222,7 +225,7 @@ with tab1:
         plat_avg = group_attendance['attendance_rate'].mean()
         
         fig1 = px.bar(group_attendance, x='group_id', y='attendance_rate',
-                      title='Attendance Rate per Group vs Platform Average (Q-1)',
+                      title='Attendance Rate per Group with Platform Average (Q-1)',
                       labels={'attendance_rate': 'Attendance Rate (%)'}, text_auto='.1f',
                       color='attendance_rate', color_continuous_scale='RdYlGn')
         fig1.add_hline(y=plat_avg, line_dash="dash", line_color="red", annotation_text=f"Platform Avg ({plat_avg:.1f}%)")
@@ -233,10 +236,10 @@ with tab1:
         
         st.markdown("""
         <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-1)</div>
-            <p class="insight-text">• يظهر التباين واضحاً بين المجموعات؛ حيث تسجل بعضها تراجعاً حاداً تحت خط متوسط المنصة العام (Red Line).</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• مراجعة المجموعات منخفضة الحضور فظياً، وربطها بجداول المحاضرين لمعالجة ضعف التفاعل.</p>
+        <div class="insight-title">💡 Insight (Q-1)</div>
+        <p class="insight-text">• A clear variance is visible across groups, with some dropping significantly below the overall platform average benchmark (Red Line).</p>
+        <div class="rec-title">🚀 Recommendation</div>
+        <p class="insight-text">• Conduct an immediate verbal review of low-attendance groups, and cross-reference them with instructor schedules to address low engagement.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -246,7 +249,7 @@ with tab1:
             x='type', 
             y='score', 
             color='type',
-            title='Score Distribution & Volatility by Assessment Type (Q-2 Pt.1)',
+            title='Score Distribution by Assessment',
             labels={'type': 'Assessment Type', 'score': 'Score (%)'},
             points="all",
             color_discrete_sequence=px.colors.qualitative.Pastel
@@ -256,38 +259,49 @@ with tab1:
         
         st.markdown("""
         <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-2 Pt.1)</div>
-            <p class="insight-text">• توزيع درجات المهام المختلفة يكشف عن تشتت عالي (Spread) ووجود ذيول سفلية تشير لرسوب مفاجئ في بعض التقييمات المعقدة.</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• إعادة مراجعة صياغة التقييمات ذات التشتت الضخم، وتقديم جلسات دعم مخصصة قبل الاختبارات الأساسية.</p>
+        <div class="insight-title">💡 Insight (Q-2 Pt.1)</div>
+        <p class="insight-text">• The score distribution across various assessments reveals high volatility (spread) with notable lower tails, indicating sudden drops/failures in certain complex tasks.</p>
+        <div class="rec-title">🚀 Recommendation</div>
+        <p class="insight-text">• Review the design and framing of assessments with high variance, and provide targeted support sessions prior to major examinations.</p>
         </div>
         """, unsafe_allow_html=True)
 
     st.write("---")
     c3, c4 = st.columns(2)
     
-    with c3:
-        fig3 = px.box(
-            filtered_final,
-            x='course_name',
-            y='score',
-            color='course_name',
-            title='Course Grade Spread & Average Disparity (Q-2 Pt.2)',
-            labels={'course_name': 'Course Name', 'score': 'Score (%)'},
-            points="all",
-            color_discrete_sequence=px.colors.qualitative.Set2
-        )
-        fig3 = apply_modern_layout(fig3)
-        st.plotly_chart(fig3, use_container_width=True)
-        
-        st.markdown("""
-        <div class="insight-box">
-            <div class="insight-title">💡 Insight (Q-2 Pt.2)</div>
-            <p class="insight-text">• يختلف متوسط الدرجات بشكل ملحوظ بين الكورسات، مما يشير إلى وجود مقررات صعبة ذات معدل درجات منخفض وثبات ضعيف.</p>
-            <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• توحيد معايير التصحيح بين المقررات وتزويد كورسات العنق الزجاجي (Bottleneck) بمحتوى تعويضي إضافي.</p>
-        </div>
-        """, unsafe_allow_html=True)
+with c3:
+
+    fig3 = px.box(
+        final_analysis_df, 
+        x='course_name',
+        y='score',
+        color='course_name',
+        title='Course Grade Spread & Average Disparity (Q-2 Pt.2)',
+        labels={'course_name': 'Course Name', 'score': 'Score (%)'},
+        points="all",
+        color_discrete_sequence=px.colors.qualitative.Set2
+    )
+    
+    fig3.update_layout(
+        margin=dict(t=150),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title_text="", font=dict(color="#ffffff", size=12)),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(family="Inter, sans-serif", color="#ffffff"),
+        title=dict(font=dict(size=16, family="Arial, sans-serif", weight="bold", color="#ffffff"), x=0, y=0.95),
+        hoverlabel=dict(bgcolor="#1e293b", font_size=12, font_family="Inter, sans-serif", bordercolor="rgba(255,255,255,0.1)", font_color="#ffffff")
+    )
+    
+    st.plotly_chart(fig3, use_container_width=True)
+    
+    st.markdown("""
+    <div class="insight-box">
+        <div class="insight-title">💡 Insight (Q-2 Pt.2)</div>
+        <p class="insight-text">• Average grades vary significantly across different courses, indicating the presence of challenging modules with lower average scores and high volatility.</p>
+        <div class="rec-title">🚀 Recommendation</div>
+        <p class="insight-text">• Standardize grading criteria across all modules and provide additional remedial/compensatory content for bottleneck courses.</p>
+    </div>
+    """, unsafe_allow_html=True)
         
     with c4:
         student_grades = filtered_final.groupby('student_id')['score'].mean().reset_index(name='avg_score')
@@ -298,13 +312,13 @@ with tab1:
         
         if not att_grade_corr_df.empty and len(att_grade_corr_df) > 1:
             correlation_value = att_grade_corr_df['attendance_rate'].corr(att_grade_corr_df['avg_score'])
-            st.metric(label="🔢 معامل الارتباط بين الحضور والدرجات (Pearson r)", value=f"{correlation_value:.2f}")
+            st.metric(label="Attendance & Grades Correlation (Pearson r)", value=f"{correlation_value:.2f}")
             
             fig_corr = px.scatter(
                 att_grade_corr_df,
                 x='attendance_rate',
                 y='avg_score',
-                title='Relationship: Student Attendance Rate vs. Average Grade (Q-3)',
+                title='Attendance Rate with Average Grade',
                 labels={'attendance_rate': 'Attendance Rate (%)', 'avg_score': 'Average Grade (%)'},
                 trendline='ols',
                 trendline_color_override='red',
@@ -314,21 +328,18 @@ with tab1:
             st.plotly_chart(fig_corr, use_container_width=True)
             
             st.markdown(f"""
-            <div class="insight-box">
-                <div class="insight-title">💡 Insight (Q-3)</div>
-                <p class="insight-text">• معامل الارتباط الحالي يبلغ ({correlation_value:.2f})، مما يثبت إحصائياً الأثر الطردي القوي لنسب الحضور على رفع درجات الطلاب النهائية.</p>
-                <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• تفعيل خطة حظر أو تنبيه آلي للطلاب بمجرد انخفاض نسبة حضورهم تجنباً للانهيار الأكاديمي.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("لا توجد بيانات متقاطعة كافية لحساب الارتباط لهذه المجموعة.")
-
+                    <div class="insight-box">
+                    <div class="insight-title">💡 Insight (Q-3)</div>
+                    <p class="insight-text">• The current correlation coefficient is ({correlation_value:.2f}), statistically proving the strong positive impact of attendance rates on improving final student grades.</p>
+                    <div class="rec-title">🚀 Recommendation</div>
+                    <p class="insight-text">• Activate an automated warning or restriction protocol for students as soon as their attendance drops to prevent academic failure.</p>
+                </div>
+                """, unsafe_allow_html=True)
 # ────────────────────────────────────────────────────────
 # TAB 2: Submissions & Device Trends (Q4, Q5, Q6)
 # ────────────────────────────────────────────────────────
 with tab2:
-    st.subheader("📌 الشريحة الثانية: تتبع وتيرة التسليمات وتفاعل الأجهزة الذكية")
+    st.subheader("📌 Section 2: Submission Patterns & Smart Device Engagement Tracking")
     c5, c6 = st.columns(2)
     
     with c5:
@@ -344,29 +355,93 @@ with tab2:
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-4)</div>
-            <p class="insight-text">• وتيرة التسليمات تكشف عن قمم (Peaks) محددة متبوعة بانهيار مفاجئ في الأسابيع التالية، مما يوضح غياب الاستمرارية.</p>
+            <p class="insight-text">• Submission frequency reveals specific spikes (peaks) followed by sharp drops in the subsequent weeks, highlighting a lack of consistent engagement.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• توزيع الديدلاينز (Deadlines) بشكل متوازن على مدار الشهر بدلاً من تكديسها في أسبوع واحد لحماية الطلاب من الضغط.</p>
+            <p class="insight-text">• Distribute submission deadlines evenly across the month rather than clustering them into a single week to prevent student burnout.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c6:
-        engagement['engagement_week'] = engagement['event_datetime'].dt.isocalendar().week
-        weekly_eng = engagement.groupby('engagement_week').size().reset_index(name='total_events')
+        # --- 1. Clean & Prepare Engagement Metrics Per Student ---
+        # Calculate login frequency per student
+        student_logins = engagement[engagement['event_type'] == 'login'].groupby('student_id').size().reset_index(name='login_count')
+
+        # Filter video watch time from negative values or outliers (less than 2 hours)
+        valid_videos = engagement[
+            (engagement['event_type'] == 'video_watch') & 
+            (engagement['duration_seconds'] > 0) & 
+            (engagement['duration_seconds'] < 7200)
+        ]
+
+        # Calculate total watch time per student and convert to minutes
+        student_video_time = valid_videos.groupby('student_id')['duration_seconds'].sum().reset_index(name='total_watch_time_mins')
+        student_video_time['total_watch_time_mins'] = student_video_time['total_watch_time_mins'] / 60
+
+        # Merge engagement metrics together for all students
+        student_engagement = pd.merge(student_logins, student_video_time, on='student_id', how='outer').fillna(0)
+
+        student_grades = final_analysis_df.groupby('student_id')['score'].mean().reset_index(name='average_grade')
+
+        correlation_df = pd.merge(student_engagement, student_grades, on='student_id', how='inner')
+
+        corr_logins = correlation_df['login_count'].corr(correlation_df['average_grade'])
+        corr_video = correlation_df['total_watch_time_mins'].corr(correlation_df['average_grade'])
+
+
+        # --- 4. Build and Display Visualizations ---
+        st.subheader("Engagement vs Academic Performance Analysis")
         
-        fig5 = px.line(weekly_eng, x='engagement_week', y='total_events',
-                       title='Total Engagement Events Across Weeks (Mid-Course Slump Testing) (Q-5)',
-                       labels={'engagement_week': 'Calendar Week', 'total_events': 'Total Events'}, markers=True)
-        fig5.update_traces(line_color='purple', line_width=3)
-        fig5.update_layout(xaxis_type='category')
-        st.plotly_chart(apply_modern_layout(fig5), use_container_width=True)
+        # Display correlation strength as metrics inside the container
+        metric_col1, metric_col2 = st.columns(2)
+        with metric_col1:
+            st.metric(label="Logins vs Grades Correlation", value=f"{corr_logins:.2f}")
+        with metric_col2:
+            st.metric(label="Watch Time vs Grades Correlation", value=f"{corr_video:.2f}")
+
+        # إنشاء تبويبات لعرض الرسمتين في نفس المكان
+        plot_tab1, plot_tab2 = st.tabs(["🔑 Logins Analysis", "📺 Watch Time Analysis"])
         
+        with plot_tab1:
+            # الرسمة البيانية الخاصة بالـ Logins (الجديدة)
+            fig_logins = px.scatter(
+                correlation_df, 
+                x='login_count', 
+                y='average_grade',
+                title='Link Strength: Total Platform Logins vs Academic Performance',
+                labels={'login_count': 'Total Logins Count', 'average_grade': 'Average Grade'},
+                trendline="ols", 
+                trendline_color_override="red"
+            )
+            fig_logins.update_traces(marker=dict(size=6, color='darkblue', opacity=0.6))
+            
+            # حل مشكلة تداخل العناوين
+            fig_logins.update_layout(margin=dict(t=100))
+            st.plotly_chart(apply_modern_layout(fig_logins) if 'apply_modern_layout' in globals() else fig_logins, use_container_width=True)
+
+        with plot_tab2:
+            # الرسمة البيانية الخاصة بالـ Watch Time (القديمة)
+            fig5 = px.scatter(
+                correlation_df, 
+                x='total_watch_time_mins', 
+                y='average_grade',
+                title='Link Strength: Total Video-Watch Time vs Academic Performance (Q-Engagement)',
+                labels={'total_watch_time_mins': 'Total Watch Time (Minutes)', 'average_grade': 'Average Grade'},
+                trendline="ols", 
+                trendline_color_override="red"
+            )
+            fig5.update_traces(marker=dict(size=6, color='purple', opacity=0.6))
+            
+            # حل مشكلة تداخل العناوين
+            fig5.update_layout(margin=dict(t=100))
+            st.plotly_chart(apply_modern_layout(fig5) if 'apply_modern_layout' in globals() else fig5, use_container_width=True)
+        
+        # صندوق الأفكار والتوصيات يظل ثابتاً بالأسفل لأنه يشمل تحليل التفاعل بشكل عام
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-5)</div>
-            <p class="insight-text">• رصد انخفاض ملحوظ في أحداث التفاعل بمنتصف الكورس (Mid-Course Slump)، وهو مؤشر نفسي خطير لملل الطلاب وفقدان الحماس الشائع.</p>
+            <p class="insight-text">• A notable decrease in engagement events is detected mid-course (Mid-Course Slump), which serves as a critical behavioral indicator of student boredom and loss of momentum.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• إطلاق مسابقات تحفيزية (Gamification) أو تحديات تفاعلية قصيرة في هذه الأسابيع الحرجة لإعادة تنشيط الحركة الرقمية.</p>
+            <p class="insight-text">• Launch motivational campaigns (Gamification) or short interactive challenges during these critical weeks to re-energize digital activity.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -387,16 +462,16 @@ with tab2:
             st.markdown("""
             <div class="insight-box">
                 <div class="insight-title">💡 Insight (Q-6)</div>
-                <p class="insight-text">• يظهر فارق في تشتت الأداء وتدني لدرجات مستخدمي فئة معينة من الأجهزة الذكية، مما يلمح لوجود فجوة فنية بالتطبيق التابع للمنصة.</p>
+                <p class="insight-text">• A variance in performance spread and lower scores is visible among users of specific device categories, hinting at potential technical optimization issues within the platform application.</p>
                 <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• تحسين واجهة المستخدم وتجربة الاستخدام (UI/UX) والتأكد من توافق المنصة ومحررات الأكواد بالكامل مع شاشات الموبايل.</p>
+                <p class="insight-text">• Optimize the user interface and overall experience (UI/UX), ensuring full compatibility of the platform and embedded code editors with mobile screens.</p>
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.warning("لا توجد بيانات أجهزة مطابقة للمجموعة الحالية.")
+            st.warning("No matching device data found for the current group.")
             
     with c8:
-        st.success("📊 **ملخص فحص الأجهزة والتفاعل:** يربط التحليل السلوكي أعلاه بين البنية التحتية لتجربة الطالب الرقمية ومخرجاته الأكاديمية الفعلية.")
+        st.success("📊 **Device & Engagement Summary:** The behavioral analysis above bridges the gap between the infrastructure of a student's digital experience and their actual academic outcomes.")
         
     c9 = st.columns(1)
     with c9[0]:
@@ -406,7 +481,7 @@ with tab2:
         
         if not eng_perf_df.empty and len(eng_perf_df) > 1:
             eng_correlation = eng_perf_df['total_engagement_events'].corr(eng_perf_df['avg_score'])
-            st.metric(label="🔢 قوة الرابط بين حجم التفاعل والدرجات (Correlation r)", value=f"{eng_correlation:.2f}")
+            st.metric(label="🔢 Engagement Volume vs. Grades (Correlation r)", value=f"{eng_correlation:.2f}")
             
             fig_eng_rel = px.scatter(
                 eng_perf_df,
@@ -424,17 +499,16 @@ with tab2:
             st.markdown(f"""
             <div class="insight-box">
                 <div class="insight-title">💡 Insight (Engagement Relationship)</div>
-                <p class="insight-text">• وجود ارتباط بقيمة ({eng_correlation:.2f}) يبرهن أن تصفح المنصة المستمر وحل الأسئلة السريعة هو المحرك الرئيسي للثبات الأكاديمي.</p>
+                <p class="insight-text">• A correlation value of ({eng_correlation:.2f}) proves that consistent platform browsing and tackling quick quizzes act as the primary drivers of academic stability.</p>
                 <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• تصميم نظام دفع وإشعارات دوري (Push Notifications) حثيث للطلاب الخاملين لرفع معدلات الدخول اليومية للمنصة.</p>
+                <p class="insight-text">• Implement a periodic push notification system tailored for inactive students to boost daily platform login rates.</p>
             </div>
             """, unsafe_allow_html=True)
-
 # ────────────────────────────────────────────────────────
 # TAB 3: Behavior & Lateness Impact (Q7, Q8, Q9)
 # ────────────────────────────────────────────────────────
 with tab3:
-    st.subheader("📌 الشريحة الثالثة: سلوكيات التأخير، الوقت المستغرق والمفاهيم الأكاديمية الأصعب")
+    st.subheader("📌 Section 3: Lateness Behavior, Time Investment, and Challenging Academic Concepts")
     c11, c12 = st.columns(2)
     
     with c11:
@@ -447,9 +521,9 @@ with tab3:
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-7 Pt.1)</div>
-            <p class="insight-text">• العلاقة خطية تصاعدية؛ زيادة الوقت المهدور في الحل ترتبط طردياً بزيادة المحاولات، مما يشير لمعاناة الطلاب من صعوبة بالغة في بعض الأسئلة المحددة.</p>
+            <p class="insight-text">• A positive linear relationship is visible; an increase in time spent on assignments directly correlates with a higher number of attempts, indicating that students are facing significant difficulties with specific problem sets.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• الكشف عن الواجبات المسببة لارتفاع عدد المحاولات وتقسيمها إلى أجزاء تدريجية أصغر لتخفيف الارتباك الحاصل.</p>
+            <p class="insight-text">• Identify the specific assignments causing high attempt volumes and break them down into smaller, incremental components to reduce student friction.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -463,9 +537,9 @@ with tab3:
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-7 Pt.2)</div>
-            <p class="insight-text">• الطلاب المتأخرون (True) يسجلون أوقات حل أقل بكثير مقارنة بالملتزمين بالمواعيد، مما يعني أن التأخير نابع من المماطلة والحل المتسرع وليس الصعوبة.</p>
+            <p class="insight-text">• Late submitters (True) record significantly less time spent working on tasks compared to on-time students. This implies that lateness stems from procrastination and rushed execution rather than task complexity.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• فرض غرامات درجات تصاعدية طفيفة على التأخير، وحث الطلاب على بدء حل التكليفات مبكراً قبل يوم التسليم النهائي.</p>
+            <p class="insight-text">• Implement minor incremental grading penalties for late submissions, and encourage students to initiate assignments well ahead of the final deadline.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -483,9 +557,9 @@ with tab3:
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-8)</div>
-            <p class="insight-text">• تحديد أدق للمفاهيم الحرجة والأصعب (الفئات باللون الأحمر الداكن بالأسفل) التي سجل فيها أغلب الطلاب درجات متدنية جداً.</p>
+            <p class="insight-text">• Precise identification of critical and complex concepts (indicated by the dark red bars at the bottom) where the majority of students achieved suboptimal scores.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• توجيه فريق المحاضرين بإعادة شرح وتغطية هذه المفاهيم المتعثرة فورا وبث مسودات مراجعة إضافية لها.</p>
+            <p class="insight-text">• Instruct the academic team to immediately review and re-teach these bottleneck concepts, and deploy additional review materials.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -505,19 +579,18 @@ with tab3:
             st.markdown("""
             <div class="insight-box">
                 <div class="insight-title">💡 Insight (Q-9)</div>
-                <p class="insight-text">• يوضح رسم الـ Violin انخفاضاً حاداً وتركيزاً للدرجات المتدنية لدى شريحة الطلاب المعتادين على التأخير المزمن بالمقارنة بالملتزمين.</p>
+                <p class="insight-text">• The violin plot illustrates a severe drop and a heavy concentration of lower scores within the habitually late student segment compared to their punctual peers.</p>
                 <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• تقديم الإرشاد الأكاديمي المبكر للطلاب الحاملين لسمة "التأخير المزمن" وتأهيلهم لإدارة وتنظيم الوقت.</p>
+                <p class="insight-text">• Provide early academic advising and time-management coaching to students flagged with habitual lateness behaviors.</p>
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.info("بيانات سلوك التسليم غير متوفرة للمجموعة الحالية.")
-
+            st.info("Submission behavior data is unavailable for the current group.")
 # ────────────────────────────────────────────────────────
 # TAB 4: Age Bands & Stratified Segments (Q10, Q11, Q12)
 # ────────────────────────────────────────────────────────
 with tab4:
-    st.subheader("📌 الشريحة الرابعة: الفئات العمرية والشرائح الاستراتيجية ومطابقة أعداد المجموعات")
+    st.subheader("📌 Section 4: Demographic Bands, Strategic Profiling, and Data Integrity Reconciliation")
     c15, c16 = st.columns(2)
     
     with c15:
@@ -544,9 +617,9 @@ with tab4:
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-10)</div>
-            <p class="insight-text">• تباين واضح في التفاعل والدرجات بين الفئات العمرية؛ حيث تسجل الفئات الأصغر سنّاً تفاعلاً أعلى ورقمنة أسرع لكنها أقل التزاماً في الحضور.</p>
+            <p class="insight-text">• Clear variance is visible in engagement and performance across demographics; younger cohorts exhibit higher digital activity and rapid platform adoption but demonstrate lower attendance consistency.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• تخصيص طابع وأساليب المتابعة التعليمية حسب الفئة العمرية للطلاب لضمان أعلى نسب استبقاء والتحام أكاديمي.</p>
+            <p class="insight-text">• Tailor communication and student-retention strategies based on age demographics to ensure optimal academic attachment and persistent engagement.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -580,9 +653,9 @@ with tab4:
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-11)</div>
-            <p class="insight-text">• يوفر المخطط الدائري رؤية واضحة لنسب توزيع شرائح الطلاب، محذراً من حجم الكتلة الحرجة المعرضة للانسحاب (Disengaged At-Risk).</p>
+            <p class="insight-text">• The chart provides clear visibility into student cohort proportions, raising an early warning regarding the size of the critical 'Disengaged At-Risk' segment vulnerable to dropouts.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• عزل شريحة 'Struggling Despite Effort' لدعمهم أكاديمياً فوراً لأنهم يتفاعلون بكثافة ولكن يعانون في الفهم الفعلي.</p>
+            <p class="insight-text">• Isolate the 'Struggling Despite Effort' segment for immediate targeted academic intervention, as they interact heavily with the platform but face actual comprehension gaps.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -607,20 +680,19 @@ with tab4:
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-12)</div>
-            <p class="insight-text">• كشف التقرير عن فجوات ومطابقة سلبية واضحة بين السجلات الدفترية والأرقام الحقيقية المقيدة بالسيستم في بعض المجموعات الذكية.</p>
+            <p class="insight-text">• The audit reveals notable data gaps and negative discrepancies between ledger records (metadata) and actual enrolled student IDs captured within the core system for specific cohorts.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• تحديث خط السير وقاعدة البيانات المرجعية للـ Metadata الخاصة بالمجموعات بشكل فوري وسد الثغرات الإدارية التابعة لها.</p>
+            <p class="insight-text">• Immediately update and synchronize the underlying metadata pipeline to eliminate administrative tracking bottlenecks and ensure reliable reporting.</p>
         </div>
         """, unsafe_allow_html=True)
         
     with c18:
-        st.info("🔍 **تقرير المطابقة وجرد السجلات (Q-12):** يهدف هذا التبويب لضمان نزاهة البيانات ومطابقة الملفات المصدرية لعدم اتخاذ قرارات دمج عشوائية بناءً على مؤشرات خاطئة.")
-
+        st.info("🔍 **Reconciliation & Record Auditing Report (Q-12):** This view ensures data pipeline integrity and cross-references source metadata to prevent misinformed structural consolidation decisions based on corrupted enrollment metrics.")
 # ────────────────────────────────────────────────────────
 # TAB 5: Advanced Risks & Group Merging (Q13, Q14, Q15)
 # ────────────────────────────────────────────────────────
 with tab5:
-    st.subheader("📌 الشريحة الخامسة: خوارزميات الدمج الذكي ونظام التدخل المبكر للمخاطر")
+    st.subheader("📌 Section 5: Intelligent Cohort Consolidation Algorithms & Early Risk Intervention System")
     c19, c20 = st.columns(2)
     
     with c19:
@@ -656,13 +728,13 @@ with tab5:
             st.markdown(f"""
             <div class="insight-box">
                 <div class="insight-title">💡 Insight (Q-13)</div>
-                <p class="insight-text">• قامت الخوارزمية بتحليل الأداء المفهومي للمجموعة الأصغر وزعتهم إقليدياً على المجموعات الكبرى حسب القرب الفكري والأكاديمي المتشابه.</p>
+                <p class="insight-text">• The algorithm analyzed the conceptual learning profiles of the smallest group and distributed them Euclideanly across larger cohorts based on intellectual proximity and academic similarity.</p>
                 <div class="rec-title">🚀 Recommendation</div>
-                <p class="insight-text">• اعتماد الدمج المقترح وتسكين الطلاب بالمجموعات المستهدفة لضمان عدم وجود تباين في الشرح والتحصيل بين الأقران الجدد.</p>
+                <p class="insight-text">• Adopt the proposed consolidation structure and re-allocate students to the recommended target groups to minimize teaching pace variance and ensure alignment among new peers.</p>
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.info("لا توجد بيانات كافية لحساب المسافة الإقليدية.")
+            st.info("Insufficient data available to compute Euclidean distance vectors.")
 
     with c20:
         student_att_abs = attendance.groupby('student_id')['is_present'].mean().reset_index()
@@ -695,57 +767,153 @@ with tab5:
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-14)</div>
-            <p class="insight-text">• نجح نظام التقييم الهجين في فرز وتحديد القائمة الحرجة لـ "أعلى 10 طلاب مهددين بالرسوب أو الانسحاب الفوري" بناءً على خوارزمية الأوزان.</p>
+            <p class="insight-text">• The hybrid evaluation system successfully screened and identified the critical list of the "Top 10 Students At-Risk of Failing or Immediate Drop-out" using the weighted risk scoring matrix.</p>
             <div class="rec-title">🚀 Recommendation</div>
-            <p class="insight-text">• سحب هذه القائمة فوراً وإسنادها لقسم الرعاية الأكاديمية بالمنصة لتقديم دعم مكثف مباشر لإنقاذهم قبل الاختبارات القادمة.</p>
+            <p class="insight-text">• Extract this roster immediately and route it to the platform's Academic Support Division to deploy intensive, direct guidance to rescue them ahead of upcoming exams.</p>
         </div>
         """, unsafe_allow_html=True)
 
-if final_analysis_df.empty:
-    st.warning("⚠️ لم يتم العثور على بيانات! تأكد من صحة مسارات ملفات الـ CSV والإكسيل.")
-#app week2
-#https://bfjdjtad47rhd95xmcjrwe.streamlit.app/
-    
-    st.subheader("📈 تتبع وتيرة أداء المجموعات عبر المسار الزمني للمنهج")
-    
     group_trends_df = final_analysis_df.copy()
     group_trends_df['date'] = pd.to_datetime(group_trends_df['date'])
+    
+    # Function to generate assessment_type column based on title keywords
+    def categorize_assessment(title):
+        title_str = str(title).lower()
+        if 'quiz' in title_str: return 'Quizzes'
+        elif 'assign' in title_str: return 'Assignments'
+        elif 'practical' in title_str: return 'Practical Exams'
+        elif 'mid' in title_str: return 'Mid Exam'
+        elif 'final' in title_str: return 'Final Exam'
+        else: return 'Bonus'
+
+    # Apply function to prevent KeyError
+    group_trends_df['assessment_type'] = group_trends_df['assessment_title'].apply(categorize_assessment)
     group_trends_df = group_trends_df.sort_values(by='date')
 
-    # حساب متوسط الدرجات لكل مجموعة بناءً على تاريخ التقييم وعنوانه
-    group_monthly_perf = group_trends_df.groupby(['group_id', 'assessment_title', 'date'])['score'].mean().reset_index()
+    # Calculate mean score per group based on assessment title, type, and date
+    group_monthly_perf = group_trends_df.groupby(['group_id', 'assessment_title', 'assessment_type', 'date'])['score'].mean().reset_index()
     group_monthly_perf = group_monthly_perf.sort_values(by=['group_id', 'date'])
 
-    # بناء الرسم البياني الخطي بشكل منظم ونظيف
-    fig_group_trends = px.line(
-        group_monthly_perf, 
-        x='assessment_title', 
-        y='score', 
+    # 🌟 NEW CODE: Calculate and Display the exact Mean Breakdown Matrix per Group 🌟
+    st.markdown("### 📋 Cohort Performance Summary Matrix")
+    
+    # Create a structured pivot summary to get the mean of each assessment type per group
+    summary_matrix = group_trends_df.pivot_table(
+        index='group_id',
+        columns='assessment_type',
+        values='score',
+        aggfunc='mean'
+    ).round(1)
+    
+    # Ensure correct category order matching your charts
+    assessment_types = ['Quizzes', 'Assignments', 'Practical Exams', 'Mid Exam', 'Final Exam', 'Bonus']
+    available_cols = [col for col in assessment_types if col in summary_matrix.columns]
+    summary_matrix = summary_matrix[available_cols]
+    
+    # Render the clean summary table inside Streamlit
+    st.dataframe(summary_matrix, use_container_width=True)
+    st.write("---")
+
+    # 1️⃣ Setup subplot layout with padding spacing to prevent overlapping
+    fig_segmented = make_subplots(
+        rows=2, cols=3,
+        subplot_titles=[f"<b>{at}</b>" for at in available_cols],
+        shared_yaxes=False,  # Disabling forced sharing gives flexibility to inspect local Min/Max clearly
+        horizontal_spacing=0.08, 
+        vertical_spacing=0.28    
+    )
+
+    # Standardize group colors across subplots
+    unique_groups = group_monthly_perf['group_id'].unique()
+    colors = px.colors.qualitative.Safe # Using high-contrast, professional palette
+    group_color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
+
+    # Distribute tracking metrics onto Subplots
+    for idx, assess_type in enumerate(available_cols):
+        row = (idx // 3) + 1
+        col = (idx % 3) + 1
+        
+        type_data = group_monthly_perf[group_monthly_perf['assessment_type'] == assess_type]
+        
+        # 2️⃣ Dynamically calculate Min/Max lines for reference mapping
+        if not type_data.empty:
+            min_score = type_data['score'].min()
+            max_score = type_data['score'].max()
+            
+            # Floor boundary guide line
+            fig_segmented.add_shape(
+                type="line", x0=-0.5, x1=len(type_data['assessment_title'].unique())-0.5, 
+                y0=min_score, y1=min_score,
+                line=dict(color="rgba(239, 85, 59, 0.4)", width=1.5, dash="dash"),
+                row=row, col=col
+            )
+            # Ceiling peak guide line
+            fig_segmented.add_shape(
+                type="line", x0=-0.5, x1=len(type_data['assessment_title'].unique())-0.5, 
+                y0=max_score, y1=max_score,
+                line=dict(color="rgba(44, 160, 44, 0.4)", width=1.5, dash="dot"),
+                row=row, col=col
+            )
+
+        for group in unique_groups:
+            group_data = type_data[type_data['group_id'] == group]
+            
+            if not group_data.empty:
+                fig_segmented.add_trace(
+                    go.Scatter(
+                        x=group_data['assessment_title'],
+                        y=group_data['score'].round(1),
+                        mode='lines+markers',
+                        name=group,
+                        line=dict(color=group_color_map[group], width=2.5), 
+                        marker=dict(size=7, symbol='circle'),
+                        # Unified hover card formatting
+                        hovertemplate=f"<b>{group}</b>: %{{y}}%<extra></extra>",
+                        showlegend=True if idx == 0 else False 
+                    ),
+                    row=row, col=col
+                )
+    
+    #graph
+    group_type_summary = group_trends_df.groupby(['group_id', 'assessment_type'])['score'].mean().reset_index()
+    
+    # Enforce logical horizontal sorting on the category axis
+    assessment_types_order = ['Quizzes', 'Assignments', 'Practical Exams', 'Mid Exam', 'Final Exam', 'Bonus']
+    group_type_summary['assessment_type'] = pd.Categorical(
+        group_type_summary['assessment_type'], 
+        categories=[at for at in assessment_types_order if at in group_type_summary['assessment_type'].unique()], 
+        ordered=True
+    )
+    group_type_summary = group_type_summary.sort_values('assessment_type')
+
+    # Construct the scatter plot tracking exactly one mean marker point per group
+    fig_summary_scatter = px.scatter(
+        group_type_summary,
+        x='assessment_type',
+        y='score',
         color='group_id',
-        title="📊 تتبع أداء المجموعات عبر التقييمات المتتالية (Trending Up vs Sliding Down)",
-        labels={'assessment_title': 'التقييمات بالترتيب الزمني', 'score': 'متوسط الدرجات', 'group_id': 'المجموعة'},
-        markers=True
+        title='🎯 Global Cohort Overview: Mean Performance Across Assessment Categories',
+        labels={'assessment_type': 'Assessment Category', 'score': 'Overall Mean Score (%)', 'group_id': 'Cohort'},
+        color_discrete_sequence=px.colors.qualitative.Safe
     )
 
-    # تحسين مظهر المحور الأفقي ومنع تداخل النصوص (تدوير الكلمات 45 درجة)
-    fig_group_trends.update_layout(
-        xaxis=dict(
-            type='category',
-            tickangle=45,
-            title_font=dict(size=14),
-        ),
-        yaxis=dict(title_font=dict(size=14)),
-        legend=dict(title="المجموعات", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=550 
+    # Style markers for clean structural visualization (No background min/max lines included)
+    fig_summary_scatter.update_traces(
+        marker=dict(size=14, opacity=0.85, line=dict(width=1, color='DarkSlateGrey')),
+        hovertemplate="<b>Cohort:</b> %{customdata[0]}<br><b>Category:</b> %{x}<br><b>Mean Score:</b> %{y:.1f}%<extra></extra>",
+        customdata=np.stack((group_type_summary['group_id'],), axis=-1)
     )
 
-    # عرض الرسمة في الـ Dashboard داخل tab5
-    st.plotly_chart(apply_modern_layout(fig_group_trends) if 'apply_modern_layout' in globals() else fig_group_trends, use_container_width=True)
+    # Clean layout tuning with corrected weight parameter for text boldness
+    fig_summary_scatter.update_layout(
+        height=520,
+        hovermode="closest",
+        xaxis=dict(gridcolor="rgba(240, 240, 240, 0.8)", tickfont=dict(size=11, weight='bold')),
+        yaxis=dict(range=[0, 105], gridcolor="rgba(220, 220, 220, 0.5)", ticksuffix="%"),
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
 
-    st.markdown("""
-    <div class="insight-box">
-        <div class="insight-title">💡 Insight (Group Trends)</div>
-        <p class="insight-text">• يوضح الرسم البياني الخطي حركة المجموعات عبر الزمن؛ المجموعات ذات المنحنى التصاعدي تكشف عن استجابة قوية لأسلوب المدرس، بينما المنحنيات الهابطة (Sliding Down) تستدعي مراجعة فورية لتحديد الفجوات المعرفية التي ظهرت بمنتصف الكورس.</p>
-    </div>
-    """, unsafe_allow_html=True)
-#https://bfjdjtad47rhd95xmcjrwe.streamlit.app/
+    # Render clean chart inside your Streamlit Tab
+    st.plotly_chart(apply_modern_layout(fig_summary_scatter) if 'apply_modern_layout' in globals() else fig_summary_scatter, use_container_width=True)
+    st.write("---")
