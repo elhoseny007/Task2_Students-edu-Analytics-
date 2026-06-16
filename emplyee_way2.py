@@ -130,10 +130,9 @@ def load_all_pipeline_data():
 
 final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data()
 # ====================== SIDEBAR FILTER ======================
-# ====================== SIDEBAR FILTER ======================
 st.sidebar.header("🔍 Control Panel & Filtering")
 available_groups = sorted(final_analysis_df['group_id'].unique())
-selected_group = st.sidebar.selectbox("Select", available_groups)
+selected_group = st.sidebar.selectbox("Select Target Group (Group ID):", available_groups)
 
 with st.sidebar:
     st.image(r"Kayfa_logo.png", width=160)
@@ -598,7 +597,7 @@ with tab4:
         fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['avg_score'], name='Score', marker_color='teal'), row=1, col=1)
         fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['attendance_rate'], name='Attendance', marker_color='coral'), row=1, col=2)
         fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['total_engagement'], name='Engagement', marker_color='indigo'), row=1, col=3)
-        fig11.update_layout(title_text='Impact of Age Bands on Outcomes & Engagement', showlegend=False, height=400)
+        fig11.update_layout(title_text='Impact of Age Bands on Outcomes & Engagement (Q-10)', showlegend=False, height=400)
         st.plotly_chart(apply_modern_layout(fig11), use_container_width=True)
         
         st.markdown("""
@@ -632,15 +631,19 @@ with tab4:
         summary_stats = seg_df.groupby('student_segment', observed=False).size().reset_index(name='student_count')
         
         fig12 = px.pie(summary_stats, names='student_segment', values='student_count',
-                       title='Strategic Student Profiling Segmentation Distribution ',
+                       title='Strategic Student Profiling Segmentation Distribution (Q-11)',
                        hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
         fig12.update_traces(textinfo='percent+value')
-        fig12.update_layout(margin=dict(t=150),
+        fig12.update_layout(
+        margin=dict(t=150),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title_text="", font=dict(color="#ffffff", size=12)),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(family="Inter, sans-serif", color="#ffffff"))
+        font=dict(family="Inter, sans-serif", color="#ffffff"),
+        title=dict(font=dict(size=16, family="Arial, sans-serif", weight="bold", color="#ffffff"), x=0, y=0.95),
+        hoverlabel=dict(bgcolor="#1e293b", font_size=12, font_family="Inter, sans-serif", bordercolor="rgba(255,255,255,0.1)", font_color="#ffffff"))
         st.plotly_chart(fig12, use_container_width=True)
+        
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-11)</div>
@@ -766,6 +769,37 @@ with tab5:
 
     group_trends_df = final_analysis_df.copy()
     group_trends_df['date'] = pd.to_datetime(group_trends_df['date'])
+    
+    # Function to generate assessment_type column based on title keywords
+    def categorize_assessment(title):
+        title_str = str(title).lower()
+        if 'quiz' in title_str: return 'Quizzes'
+        elif 'assign' in title_str: return 'Assignments'
+        elif 'practical' in title_str: return 'Practical Exams'
+        elif 'mid' in title_str: return 'Mid Exam'
+        elif 'final' in title_str: return 'Final Exam'
+        else: return 'Bonus'
+
+    # Apply function to prevent KeyError
+    group_trends_df['assessment_type'] = group_trends_df['assessment_title'].apply(categorize_assessment)
+    group_trends_df = group_trends_df.sort_values(by='date')
+
+    # Calculate mean score per group based on assessment title, type, and date
+    group_monthly_perf = group_trends_df.groupby(['group_id', 'assessment_title', 'assessment_type', 'date'])['score'].mean().reset_index()
+    group_monthly_perf = group_monthly_perf.sort_values(by=['group_id', 'date'])
+    # Create a structured pivot summary to get the mean of each assessment type per group
+    summary_matrix = group_trends_df.pivot_table(
+        index='group_id',
+        columns='assessment_type',
+        values='score',
+        aggfunc='mean'
+    ).round(1)
+    
+    # Ensure correct category order matching your charts
+    assessment_types = ['Quizzes', 'Assignments', 'Practical Exams', 'Mid Exam', 'Final Exam', 'Bonus']
+    available_cols = [col for col in assessment_types if col in summary_matrix.columns]
+    summary_matrix = summary_matrix[available_cols]
+    
 
     #graph
     group_type_summary = group_trends_df.groupby(['group_id', 'assessment_type'])['score'].mean().reset_index()
@@ -810,3 +844,4 @@ with tab5:
     # Render clean chart inside your Streamlit Tab
     st.plotly_chart(apply_modern_layout(fig_summary_scatter) if 'apply_modern_layout' in globals() else fig_summary_scatter, use_container_width=True)
     st.write("---")
+
