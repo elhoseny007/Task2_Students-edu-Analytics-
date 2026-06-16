@@ -130,9 +130,10 @@ def load_all_pipeline_data():
 
 final_analysis_df, attendance, concepts, engagement, submissions, groups, students = load_all_pipeline_data()
 # ====================== SIDEBAR FILTER ======================
+# ====================== SIDEBAR FILTER ======================
 st.sidebar.header("🔍 Control Panel & Filtering")
 available_groups = sorted(final_analysis_df['group_id'].unique())
-selected_group = st.sidebar.selectbox("Select Target Group (Group ID):", available_groups)
+selected_group = st.sidebar.selectbox("Select", available_groups)
 
 with st.sidebar:
     st.image(r"Kayfa_logo.png", width=160)
@@ -597,7 +598,7 @@ with tab4:
         fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['avg_score'], name='Score', marker_color='teal'), row=1, col=1)
         fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['attendance_rate'], name='Attendance', marker_color='coral'), row=1, col=2)
         fig11.add_trace(go.Bar(x=age_band_stats['age_band'], y=age_band_stats['total_engagement'], name='Engagement', marker_color='indigo'), row=1, col=3)
-        fig11.update_layout(title_text='Impact of Age Bands on Outcomes & Engagement (Q-10)', showlegend=False, height=400)
+        fig11.update_layout(title_text='Impact of Age Bands on Outcomes & Engagement', showlegend=False, height=400)
         st.plotly_chart(apply_modern_layout(fig11), use_container_width=True)
         
         st.markdown("""
@@ -631,11 +632,15 @@ with tab4:
         summary_stats = seg_df.groupby('student_segment', observed=False).size().reset_index(name='student_count')
         
         fig12 = px.pie(summary_stats, names='student_segment', values='student_count',
-                       title='Strategic Student Profiling Segmentation Distribution (Q-11)',
+                       title='Strategic Student Profiling Segmentation Distribution ',
                        hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
         fig12.update_traces(textinfo='percent+value')
-        st.plotly_chart(apply_modern_layout(fig12), use_container_width=True)
-        
+        fig12.update_layout(margin=dict(t=150),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title_text="", font=dict(color="#ffffff", size=12)),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(family="Inter, sans-serif", color="#ffffff"))
+        st.plotly_chart(fig12, use_container_width=True)
         st.markdown("""
         <div class="insight-box">
             <div class="insight-title">💡 Insight (Q-11)</div>
@@ -761,105 +766,7 @@ with tab5:
 
     group_trends_df = final_analysis_df.copy()
     group_trends_df['date'] = pd.to_datetime(group_trends_df['date'])
-    
-    # Function to generate assessment_type column based on title keywords
-    def categorize_assessment(title):
-        title_str = str(title).lower()
-        if 'quiz' in title_str: return 'Quizzes'
-        elif 'assign' in title_str: return 'Assignments'
-        elif 'practical' in title_str: return 'Practical Exams'
-        elif 'mid' in title_str: return 'Mid Exam'
-        elif 'final' in title_str: return 'Final Exam'
-        else: return 'Bonus'
 
-    # Apply function to prevent KeyError
-    group_trends_df['assessment_type'] = group_trends_df['assessment_title'].apply(categorize_assessment)
-    group_trends_df = group_trends_df.sort_values(by='date')
-
-    # Calculate mean score per group based on assessment title, type, and date
-    group_monthly_perf = group_trends_df.groupby(['group_id', 'assessment_title', 'assessment_type', 'date'])['score'].mean().reset_index()
-    group_monthly_perf = group_monthly_perf.sort_values(by=['group_id', 'date'])
-
-    # 🌟 NEW CODE: Calculate and Display the exact Mean Breakdown Matrix per Group 🌟
-    st.markdown("### 📋 Cohort Performance Summary Matrix")
-    
-    # Create a structured pivot summary to get the mean of each assessment type per group
-    summary_matrix = group_trends_df.pivot_table(
-        index='group_id',
-        columns='assessment_type',
-        values='score',
-        aggfunc='mean'
-    ).round(1)
-    
-    # Ensure correct category order matching your charts
-    assessment_types = ['Quizzes', 'Assignments', 'Practical Exams', 'Mid Exam', 'Final Exam', 'Bonus']
-    available_cols = [col for col in assessment_types if col in summary_matrix.columns]
-    summary_matrix = summary_matrix[available_cols]
-    
-    # Render the clean summary table inside Streamlit
-    st.dataframe(summary_matrix, use_container_width=True)
-    st.write("---")
-
-    # 1️⃣ Setup subplot layout with padding spacing to prevent overlapping
-    fig_segmented = make_subplots(
-        rows=2, cols=3,
-        subplot_titles=[f"<b>{at}</b>" for at in available_cols],
-        shared_yaxes=False,  # Disabling forced sharing gives flexibility to inspect local Min/Max clearly
-        horizontal_spacing=0.08, 
-        vertical_spacing=0.28    
-    )
-
-    # Standardize group colors across subplots
-    unique_groups = group_monthly_perf['group_id'].unique()
-    colors = px.colors.qualitative.Safe # Using high-contrast, professional palette
-    group_color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
-
-    # Distribute tracking metrics onto Subplots
-    for idx, assess_type in enumerate(available_cols):
-        row = (idx // 3) + 1
-        col = (idx % 3) + 1
-        
-        type_data = group_monthly_perf[group_monthly_perf['assessment_type'] == assess_type]
-        
-        # 2️⃣ Dynamically calculate Min/Max lines for reference mapping
-        if not type_data.empty:
-            min_score = type_data['score'].min()
-            max_score = type_data['score'].max()
-            
-            # Floor boundary guide line
-            fig_segmented.add_shape(
-                type="line", x0=-0.5, x1=len(type_data['assessment_title'].unique())-0.5, 
-                y0=min_score, y1=min_score,
-                line=dict(color="rgba(239, 85, 59, 0.4)", width=1.5, dash="dash"),
-                row=row, col=col
-            )
-            # Ceiling peak guide line
-            fig_segmented.add_shape(
-                type="line", x0=-0.5, x1=len(type_data['assessment_title'].unique())-0.5, 
-                y0=max_score, y1=max_score,
-                line=dict(color="rgba(44, 160, 44, 0.4)", width=1.5, dash="dot"),
-                row=row, col=col
-            )
-
-        for group in unique_groups:
-            group_data = type_data[type_data['group_id'] == group]
-            
-            if not group_data.empty:
-                fig_segmented.add_trace(
-                    go.Scatter(
-                        x=group_data['assessment_title'],
-                        y=group_data['score'].round(1),
-                        mode='lines+markers',
-                        name=group,
-                        line=dict(color=group_color_map[group], width=2.5), 
-                        marker=dict(size=7, symbol='circle'),
-                        # Unified hover card formatting
-                        hovertemplate=f"<b>{group}</b>: %{{y}}%<extra></extra>",
-                        showlegend=True if idx == 0 else False 
-                    ),
-                    row=row, col=col
-                )
-    
     #graph
     group_type_summary = group_trends_df.groupby(['group_id', 'assessment_type'])['score'].mean().reset_index()
     
@@ -878,7 +785,7 @@ with tab5:
         x='assessment_type',
         y='score',
         color='group_id',
-        title='🎯 Mean Performance Across Assessment Categories',
+        title='🎯 Global Cohort Overview: Mean Performance Across Assessment Categories',
         labels={'assessment_type': 'Assessment Category', 'score': 'Overall Mean Score (%)', 'group_id': 'Cohort'},
         color_discrete_sequence=px.colors.qualitative.Safe
     )
@@ -892,7 +799,6 @@ with tab5:
 
     # Clean layout tuning with corrected weight parameter for text boldness
     fig_summary_scatter.update_layout(
-        margin=dict(t=150),
         height=520,
         hovermode="closest",
         xaxis=dict(gridcolor="rgba(240, 240, 240, 0.8)", tickfont=dict(size=11, weight='bold')),
