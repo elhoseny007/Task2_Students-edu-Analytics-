@@ -878,7 +878,7 @@ with tab5:
         x='assessment_type',
         y='score',
         color='group_id',
-        title='🎯 Global Cohort Overview: Mean Performance Across Assessment Categories',
+        title='🎯 Mean Performance Across Assessment Categories',
         labels={'assessment_type': 'Assessment Category', 'score': 'Overall Mean Score (%)', 'group_id': 'Cohort'},
         color_discrete_sequence=px.colors.qualitative.Safe
     )
@@ -892,6 +892,7 @@ with tab5:
 
     # Clean layout tuning with corrected weight parameter for text boldness
     fig_summary_scatter.update_layout(
+        margin=dict(t=150),
         height=520,
         hovermode="closest",
         xaxis=dict(gridcolor="rgba(240, 240, 240, 0.8)", tickfont=dict(size=11, weight='bold')),
